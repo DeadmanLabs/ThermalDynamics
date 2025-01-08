@@ -1,12 +1,10 @@
 plugins {
     id 'java'
     id 'maven-publish'
-
     id 'com.github.johnrengelman.shadow' version '7.1.2'
     id 'com.matthewprenger.cursegradle' version '1.4.0'
     id 'com.modrinth.minotaur' version "2.+"
-
-    id 'net.neoforged.gradle.userdev' version '7.0.97'
+    id 'net.neoforged.gradle.userdev' version '7.0.97' // NeoForge Gradle plugin
 }
 
 java {
@@ -14,7 +12,6 @@ java {
         languageVersion = JavaLanguageVersion.of(17)
     }
     withSourcesJar()
-    // withJavadocJar()
 }
 
 sourceSets.main.resources.srcDirs += "src/main/generated"
@@ -31,6 +28,22 @@ println "Using NeoForge: ${neo_version}, for Minecraft: ${mc_version}"
 
 minecraft {
     accessTransformers.file file("src/main/resources/META-INF/accesstransformer.cfg")
+
+    runs {
+        client {
+            workingDirectory project.file('run/client') // Directory for client runs
+            ideaModule "${rootProject.name}.${project.name}.main" // For IntelliJ IDEA
+            taskName 'runClient' // Name of the task
+            modSource project.sourceSets.main // Use the main source set for mods
+        }
+
+        server {
+            workingDirectory project.file('run/server') // Directory for server runs
+            ideaModule "${rootProject.name}.${project.name}.main" // For IntelliJ IDEA
+            taskName 'runServer' // Name of the task
+            modSource project.sourceSets.main // Use the main source set for mods
+        }
+    }
 }
 
 if (System.getenv('CURSEFORGE_KEY') || project.hasProperty('curseforgeKey')) {

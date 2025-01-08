@@ -31,7 +31,7 @@ public class AttachmentRedstoneControlPacket {
             }
             Player player = senderOptional.get();
 
-            Level world = player.level;
+            Level world = player.level();
             if (!world.isLoaded(payload.pos())) {
                 return;
             }

@@ -148,7 +148,7 @@ public class FluidFilterAttachment implements IFilterableAttachment, IRedstoneCo
     @Override
     public AbstractContainerMenu createMenu(int i, Inventory inventory, Player player) {
 
-        return new FluidFilterAttachmentMenu(i, player.level, pos(), side, inventory, player);
+        return new FluidFilterAttachmentMenu(i, player.level(), pos(), side, inventory, player);
     }
 
     @Nullable

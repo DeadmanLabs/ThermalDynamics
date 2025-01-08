@@ -35,7 +35,7 @@ public class ItemBufferMenu extends BlockEntityCoFHMenu {
                     @Override
                     public void setChanged() {
 
-                        ((InvWrapperCoFH) container).onInventoryChange(slot);
+                        ((InvWrapperCoFH) container).onInventoryChange(this.getSlotIndex());
                     }
                 });
             }

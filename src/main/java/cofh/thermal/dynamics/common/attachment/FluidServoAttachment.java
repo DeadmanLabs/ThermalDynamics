@@ -151,7 +151,7 @@ public class FluidServoAttachment implements IFilterableAttachment, IRedstoneCon
     @Override
     public AbstractContainerMenu createMenu(int i, Inventory inventory, Player player) {
 
-        return new FluidServoAttachmentMenu(i, player.level, pos(), side, inventory, player);
+        return new FluidServoAttachmentMenu(i, player.level(), pos(), side, inventory, player);
     }
 
     @Nullable

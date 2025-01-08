@@ -64,7 +64,7 @@ public class ItemServoInterblock implements MenuProvider {
     @Override
     public AbstractContainerMenu createMenu(int i, Inventory inventory, Player player) {
 
-        return new FluidServoInterblockMenu(i, player.level, pos, side, inventory);
+        return new FluidServoInterblockMenu(i, player.level(), pos, side, inventory);
     }
 
 }

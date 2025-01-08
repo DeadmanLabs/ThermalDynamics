@@ -148,7 +148,7 @@ public class FluidTurboServoAttachment implements IFilterableAttachment, IRedsto
     @Override
     public AbstractContainerMenu createMenu(int i, Inventory inventory, Player player) {
 
-        return new FluidTurboServoAttachmentMenu(i, player.level, pos(), side, inventory, player);
+        return new FluidTurboServoAttachmentMenu(i, player.level(), pos(), side, inventory, player);
     }
 
     @Nullable

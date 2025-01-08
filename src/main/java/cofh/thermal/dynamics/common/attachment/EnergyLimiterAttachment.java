@@ -126,7 +126,7 @@ public class EnergyLimiterAttachment implements IAttachment, IRedstoneControllab
     @Override
     public AbstractContainerMenu createMenu(int i, Inventory inventory, Player player) {
 
-        return new EnergyLimiterAttachmentMenu(i, player.level, pos(), side, inventory, player);
+        return new EnergyLimiterAttachmentMenu(i, player.level(), pos(), side, inventory, player);
     }
 
     @Nullable

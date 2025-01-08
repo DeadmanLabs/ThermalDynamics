@@ -179,11 +179,11 @@ public abstract class DuctBlockEntity<G extends Grid<G, N>, N extends GridNode<G
                     stack.setTag(null);
                     return false;
                 }
-                player.level.playSound(null, player.blockPosition(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.5F, 0.7F);
+                player.level().playSound(null, player.blockPosition(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.5F, 0.7F);
                 return true;
             }
             conveyableData.readConveyableData(player, stack.getTag());
-            player.level.playSound(null, player.blockPosition(), SoundEvents.UI_BUTTON_CLICK.value(), SoundSource.PLAYERS, 0.5F, 0.8F);
+            player.level().playSound(null, player.blockPosition(), SoundEvents.UI_BUTTON_CLICK.value(), SoundSource.PLAYERS, 0.5F, 0.8F);
             return true;
         }
         return false;

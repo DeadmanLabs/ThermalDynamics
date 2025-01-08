@@ -22,7 +22,7 @@ public class SlotFalseBuffer extends SlotFalseCopy {
         if (!mayPlace(stack)) {
             return;
         }
-        container.setItem(this.slot, stack);
+        super.set(stack);
         setChanged();
     }
 
@@ -30,7 +30,7 @@ public class SlotFalseBuffer extends SlotFalseCopy {
 
         ItemStack myStack = getItem();
         if (!myStack.isEmpty() && myStack.getCount() < myStack.getMaxStackSize()) {
-            container.setItem(this.slot, cloneStack(myStack, Math.min(myStack.getCount() + count, myStack.getMaxStackSize())));
+            super.set(cloneStack(myStack, Math.min(myStack.getCount() + count, myStack.getMaxStackSize())));
             setChanged();
         }
     }
@@ -39,7 +39,7 @@ public class SlotFalseBuffer extends SlotFalseCopy {
 
         ItemStack myStack = getItem();
         if (!myStack.isEmpty() && myStack.getCount() > 1) {
-            container.setItem(this.slot, cloneStack(myStack, Math.max(myStack.getCount() - count, 1)));
+            super.set(cloneStack(myStack, Math.max(myStack.getCount() - count, 1)));
             setChanged();
         }
     }

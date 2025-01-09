@@ -4,6 +4,9 @@ plugins {
     id 'idea'
     id 'maven-publish'
     id 'net.neoforged.gradle.userdev' version '7.0.145'
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
+    id 'com.matthewprenger.cursegradle' version '1.4.0'
+    id 'com.modrinth.minotaur' version "2.+"
 }
 
 tasks.named('wrapper', Wrapper).configure {
@@ -86,6 +89,8 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 // a dependency that will be present for runtime testing but that is
 // "optional", meaning it will not be pulled by dependents of this mod.
 configurations {
+    shadow
+    implementation.extendsFrom shadow
     runtimeClasspath.extendsFrom localRuntime
 }
 
@@ -119,6 +124,24 @@ dependencies {
     // For more info:
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
     // http://www.gradle.org/docs/current/userguide/dependency_management.html
+
+    // Mod dependencies from the original build.gradle
+    implementation("com.teamcofh:cofh_core:${minecraft_version}-${cofh_core_version}+")
+    implementation("com.teamcofh:thermal_core:${minecraft_version}-${thermal_core_version}+")
+
+    // Shadow dependencies
+    shadow("net.covers1624:Quack:0.4.10.105")
+
+    // Compile-only dependencies
+    compileOnly("org.jetbrains:annotations:22.0.0")
+
+    // Test dependencies
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.8.2")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.8.2")
+}
+
+minecraft {
+    accessTransformers.file file("src/main/resources/META-INF/accesstransformer.cfg")
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -137,11 +160,15 @@ tasks.withType(ProcessResources).configureEach {
             mod_license            : mod_license,
             mod_version            : mod_version,
             mod_authors            : mod_authors,
-            mod_description        : mod_description
+            mod_description        : mod_description,
+            cofh_core_version_range: "[${cofh_core_version.replace(".+", "")},${cofh_core_max_version})",
+            thermal_core_version_range: "[${thermal_core_version.replace(".+", "")},${thermal_core_max_version})",
+            lang_version              : neo_version.split('\\.')[0],
+            file                      : ['jarVersion': mod_version] // Add this line
     ]
     inputs.properties replaceProperties
 
-    filesMatching(['META-INF/neoforge.mods.toml']) {
+    filesMatching(['META-INF/neoforge.mods.toml', 'META-INF/mods.toml']) {
         expand replaceProperties
     }
 }
@@ -171,3 +198,53 @@ idea {
         downloadJavadoc = true
     }
 }
+
+// ShadowJar configuration
+shadowJar {
+    archiveClassifier = 'universal'
+    configurations = [project.configurations.shadow]
+    relocate 'net.covers1624.quack', 'cofh.requack'
+    manifest {
+        attributes([
+                'Specification-Title'     : "${mod_name}",
+                'Specification-Vendor'    : 'Team CoFH',
+                'Specification-Version'   : "${minecraft_version}",
+                'Implementation-Title'    : "${mod_id}",
+                'Implementation-Vendor'   : 'Team CoFH',
+                'Implementation-Version'  : "${mod_version}",
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+}
+
+// Sign ShadowJar task
+tasks.register("signShadowJar") {
+    dependsOn("shadowJar")
+
+    doFirst {
+        def args = [:]
+        args['jar'] = shadowJar.archiveFile.get().asFile
+        if (System.getenv("KEY_STORE")) {
+            args['keyStore'] = System.getenv("KEY_STORE")
+            file(System.getenv("KEY_STORE_PROPS")).withReader {
+                def props = new Properties()
+                props.load(it)
+                args.addAll(props)
+            }
+        } else if (project.hasProperty('keyStore')) {
+            args['keyStore'] = project.getProperty('keyStore')
+            args['alias'] = project.getProperty('keyStoreAlias')
+            args['storePass'] = project.getProperty('keyStorePass')
+            args['keyPass'] = project.getProperty('keyStoreKeyPass')
+        } else {
+            println "No signing properties."
+            state.setOutcome(org.gradle.api.internal.tasks.TaskExecutionOutcome.UP_TO_DATE)
+            didWork = false
+            return
+        }
+        project.ant.invokeMethod('signjar', args)
+    }
+}
+
+ext.lang_version = neo_version.split('\\.')[0]
+ext.file = ['jarVersion' : mod_version]

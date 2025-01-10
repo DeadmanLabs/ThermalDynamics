@@ -79,11 +79,21 @@ public final class ItemGridStorage implements IItemHandler, INBTSerializable<Com
     }
 
     public ItemGridStorage read(CompoundTag nbt) {
-        
+        setItem(ItemStack.loadItemStackFromNBT(nbt));
+        this.baseCapacity = nbt.getInt(TAG_CAPACITY);
+
+        this.averageOut = nbt.getInt(TAG_TRACK_OUT);
+
+        updateCapacity();
+        return this;
     }
 
     public CompoundTag write(CompoundTag nbt) {
-        
+        item.writeToNBT(nbt);
+        nbt.putInt(TAG_CAPACITY, baseCapacity);
+
+        nbt.putInt(TAG_TRACK_OUT, averageOut);
+        return nbt;
     }
 
     @Override
@@ -101,6 +111,83 @@ public final class ItemGridStorage implements IItemHandler, INBTSerializable<Com
         return 1;
     }
 
-    
+    @Nonnull
+    @Override
+    public ItemStack getItemsInStorage(int storage) {
+        return item;
+    }
+
+    @Override
+    public int fill(ItemStack resource, ItemAction action) {
+        if (resource.isEmpty() || !isItemValid(0, resource)) {
+            return 0;
+        }
+        if (action.simulate()) {
+            if (item.isEmpty()) {
+                return Math.min(capacity, resource.getCount());
+            }
+            if (!item.isItemEqual(resource)) {
+                return 0;
+            }
+            return Math.min(capacity - item.getCount(), resource.getCount());
+        }
+        if (item.isEmpty()) {
+            setItem(new ItemStack(resource, Math.min(capacity, resource.getCount())));
+            return item.getCount();
+        }
+        if (!item.isItemEqual(resource)) {
+            return 0;
+        }
+        if (item.getCount() >= capacity) {
+            return 0;
+        }
+        int filled = capacity - item.getCount();
+        if (resource.getAmount() < filled) {
+            item.grow(resource.getCount());
+            filled = resource.getCount();
+        } else {
+            item.setCount(capacity);
+        }
+        return filled;
+    }
+
+    @Nonnull
+    @Override
+    public ItemStack drain(ItemStack resource, ItemAction action) {
+        if (resource.isEmpty() || !resource.isItemEqual(item)) {
+            return ItemStack.EMPTY;
+        }
+        return drain(resource.getCount(), action);
+    }
+
+    @Nonnull
+    @Override
+    public ItemStack drain(int maxDrain, ItemAction action) {
+        if (maxDrain <= 0 || item.isEmpty()) {
+            return ItemStack.EMPTY;
+        }
+        int drained = maxDrain;
+        if (item.getCount() < drained) {
+            drained = item.getCount();
+        }
+        ItemStack stack = new ItemStack(item, drained);
+        if (action.execute()) {
+            item.shrink(drained);
+            if (item.isEmpty()) {
+                setItem(ItemStack.EMPTY);
+            }
+        }
+        return stack;
+    }
+
+    @Override
+    public int getStorageCapacity(int storage) {
+        return capacity;
+    }
+
+    @Override
+    public boolean isItemValid(int storage, @Nonnull ItemStack stack) {
+        return true;
+    }
 }
 

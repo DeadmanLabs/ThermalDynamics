@@ -179,6 +179,12 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> implements IItemHandl
     public void setCapacity(int capacity) { storage.setCapacity(capacity); }
     public void setItem(ItemStack item) { storage.setItem(item); }
 
-
+    @Override public int getStorages() { return storage.getStorages(); }
+    @Override public ItemStack getItemInStorage(int storage) { return storage.getItemInStorage(storage); }
+    @Override public int fill(ItemStack resource, ItemAction action) { return storage.fill(resource, action); }
+    @Override public ItemStack drain (ItemStack resource, ItemAction action) { return storage.drain(resource, action); }
+    @Override public ItemStack drain (int maxDrain, ItemAction action) { return storage.drain(maxDrain, action); }
+    @Override public int getStorageCapacity(int storage) { return storage.getStorageCapacity(storage); }
+    @Override public boolean isItemValid(int storage, @Nonnull ItemStack stack) { return storage.isItemValid(storage, stack); } 
     //@formatter:on
 }

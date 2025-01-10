@@ -16,6 +16,8 @@ public class TDynIDs {
     public static final String ID_ENERGY_DUCT = "energy_duct";
     public static final String ID_FLUID_DUCT = "fluid_duct";
     public static final String ID_FLUID_DUCT_WINDOWED = "fluid_duct_windowed";
+    public static final String ID_ITEM_DUCT = "item_duct";
+    public static final String ID_ITEM_DUCT_WINDOWED = "item_duct_windowed";
 
     public static final String ID_ENERGY_DISTRIBUTOR = "energy_distributor";
 

@@ -246,5 +246,9 @@ tasks.register("signShadowJar") {
     }
 }
 
-ext.lang_version = neo_version.split('\\.')[0]
-ext.file = ['jarVersion' : mod_version]
+ext {
+    lang_version = "20"
+    neo_version = "20.4.237"
+    cofh_core_version_range = "[11.0.2,11.1.0)"
+    thermal_core_version_range = "[11.0.7,11.1.0)"
+}

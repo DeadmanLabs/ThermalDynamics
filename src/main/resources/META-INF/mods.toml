@@ -1,11 +1,11 @@
 modLoader = "javafml"
-loaderVersion = "[${lang_version},)"
+loaderVersion = "[20,)"  # Ensure this matches your NeoForge version
 issueTrackerURL = "https://github.com/cofh/feedback"
 license = "CoFH - Don't Be A Jerk (Learn, Don't Steal)"
 
 [[mods]]
 modId = "thermal_dynamics"
-version = "${file.jarVersion}"
+version = "${file.jarVersion}"  # Ensure this is substituted correctly
 displayName = "Thermal Dynamics"
 updateJSONURL = "https://raw.github.com/cofh/version/main/thermal/update_dynamics.json"
 displayURL = "https://teamcofh.com/"
@@ -17,30 +17,31 @@ Thermal gets dynamic!
 
 Contains various logistic options for technical gameplay!
 '''
+
 [[dependencies.thermal_dynamics]]
 modId = "minecraft"
-type = "required"
-versionRange = "1.20.4"
+mandatory = true
+versionRange = "[1.20.4]"
 ordering = "AFTER"
 side = "BOTH"
 
 [[dependencies.thermal_dynamics]]
 modId = "neoforge"
-type = "required"
-versionRange = "[${neo_version},)"
+mandatory = true
+versionRange = "[20.4.237,)"
 ordering = "AFTER"
 side = "BOTH"
 
 [[dependencies.thermal_dynamics]]
 modId = "cofh_core"
-required = true
-versionRange = "${cofh_core_version_range}"
+mandatory = true
+versionRange = "[11.0.2,)"
 ordering = "AFTER"
 side = "BOTH"
 
 [[dependencies.thermal_dynamics]]
 modId = "thermal"
-required = true
-versionRange = "${thermal_core_version_range}"
+mandatory = true
+versionRange = "[11.0.7,)"
 ordering = "AFTER"
 side = "BOTH"

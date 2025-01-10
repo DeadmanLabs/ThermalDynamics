@@ -10,11 +10,14 @@ import net.minecraftforge.common.data.BlockTagsProvider;
 import net.minecraftforge.common.data.ExistingFileHelper;
 
 import javax.annotation.Nullable;
+
 import java.util.concurrent.CompletableFuture;
 
 import static cofh.lib.util.constants.ModIds.ID_THERMAL;
 import static cofh.thermal.core.ThermalCore.BLOCKS;
 import static cofh.thermal.dynamics.init.registries.TDynIDs.*;
+import jdk.internal.classfile.CodeBuilder;
+import sun.jvm.hotspot.debugger.cdbg.BlockSym;
 
 public class TDynTagsProvider {
 
@@ -33,12 +36,16 @@ public class TDynTagsProvider {
             tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ENERGY_DUCT));
             tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_FLUID_DUCT));
             tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_FLUID_DUCT_WINDOWED));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_WINDOWED));
 
             tag(BlockTags.MINEABLE_WITH_AXE).add(BLOCKS.get(ID_ITEM_BUFFER));
 
             tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ENERGY_DUCT));
             tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_FLUID_DUCT));
             tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_FLUID_DUCT_WINDOWED));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_WINDOWED));
             // endregion
         }
 

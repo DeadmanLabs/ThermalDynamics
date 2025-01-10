@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "C": {
+      "tag": "forge:ingots/bronze"
+    },
+    "G": {
+      "tag": "thermal:glass/hardened"
+    }
+  },
+  "pattern": [
+    "CGC"
+  ],
+  "result": {
+    "count": 4,
+    "item": "thermal:fluid_duct_windowed"
+  },
+  "show_notification": true
+}

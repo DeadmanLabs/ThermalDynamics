@@ -1,0 +1,7 @@
+{
+    "replace": false,
+    "values": [
+      "thermal:item_duct",
+      "thermal:item_duct_windowed"
+    ]
+  }

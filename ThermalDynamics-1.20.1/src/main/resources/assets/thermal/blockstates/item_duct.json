@@ -1,0 +1,10 @@
+{
+    "variants": {
+      "": [
+        {
+          "model": "thermal:block/item_duct"
+        }
+      ]
+    }
+  }
+  

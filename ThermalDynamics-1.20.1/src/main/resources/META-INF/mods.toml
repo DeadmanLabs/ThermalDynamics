@@ -1,0 +1,46 @@
+modLoader = "javafml"
+loaderVersion = "[${forge_major_version},)"
+issueTrackerURL = "https://github.com/cofh/feedback"
+license = "CoFH - Don't Be A Jerk (Learn, Don't Steal)"
+
+[[mods]]
+modId = "thermal_dynamics"
+version = "${file.jarVersion}"
+displayName = "Thermal Dynamics"
+updateJSONURL = "https://raw.github.com/cofh/version/main/thermal/update_dynamics.json"
+displayURL = "https://teamcofh.com/"
+logoFile = "thermal_dynamics.png"
+credits = "Team CoFH"
+authors = "King Lemming, covers1624"
+description = '''
+Thermal gets dynamic!
+
+Contains various logistic options for technical gameplay!
+'''
+[[dependencies.thermal_dynamics]]
+modId = "minecraft"
+mandatory = true
+versionRange = "1.20.1"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.thermal_dynamics]]
+modId = "forge"
+mandatory = true
+versionRange = "[${forge_version},)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.thermal_dynamics]]
+modId = "cofh_core"
+mandatory = true
+versionRange = "${cofh_core_version_range}"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.thermal_dynamics]]
+modId = "thermal"
+mandatory = true
+versionRange = "${thermal_core_version_range}"
+ordering = "AFTER"
+side = "BOTH"

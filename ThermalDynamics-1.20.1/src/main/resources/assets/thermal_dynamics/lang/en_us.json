@@ -7,19 +7,13 @@
   "attachment.thermal.filter": "Fluiduct Filter",
   "attachment.thermal.servo": "Fluiduct Servo",
   "attachment.thermal.turbo_servo": "Fluiduct Turbo-Servo",
-  "attachment.thermal.item_filter": "Itemduct Filter",
-  "attachment.thermal.item_servo": "Itemduct Servo",
 
   "block.thermal.energy_duct": "Fluxduct",
   "block.thermal.fluid_duct": "Fluiduct",
   "block.thermal.fluid_duct_windowed": "Fluiduct (Windowed)",
-  "block.thermal.item_duct": "Itemduct",
-  "block.thermal.item_duct_windowed": "Itemduct (Windowed)",
 
   "block.thermal.energy_distributor": "RF Distribution Interface",
   "block.thermal.fluid_distributor": "Fluid Distribution Interface",
-  "block.thermal.item_distributor": "Item Distribution Interface",
-
 
   "block.thermal.item_buffer": "Logistical Item Buffer",
 
@@ -44,20 +38,16 @@
   "info.thermal.fluid_turbo_servo_attachment.2": "Additional options can be used to fine-tune filtering and extraction amount.",
   "info.thermal.fluid_turbo_servo_attachment.3": "Redstone Control is used to enable extraction.",
 
-  "info.thermal.item_attachment.mode.0": "Bidirectional Filtering",
-  "info.thermal.item_attachment.mode.1": "Outbound (From Duct) Filtering",
-  "info.thermal.item_attachment.mode.2": "Inbound (To Duct) Filtering",
+  "info.thermal.item_filter_attachment.0": "Place items in slots to add the item to the filter list.",
+  "info.thermal.item_filter_attachment.1": "Additional options can be used to fine-tune filtering.",
+  "info.thermal.item_filter_attachment.2": "Redstone Control can be used to temporarily disable filtering.",
 
-  "info.thermal.item_filter_attachment.0":  "Place items in slots to add the item to the filter list.",
-  "info.thermal.item_filter_attachment.1":  "Additional options can be used to fine-tune filtering.",
-  "info.thermal.item_filter_attachment.2":  "Redstone Control can be used to temporarily disable filtering.",
-
-  "info.thermal.item_servo_attachment.0":  "Place items in slots to add the item to the filter list.",
-  "info.thermal.item_servo_attachment.1":  "Additional options can be used to fine-tune filtering.",
-  "info.thermal.item_servo_attachment.2":  "Redstone Control is used to enable extraction.",
+  "info.thermal.item_servo_attachment.0": "Place items in slots to add the item to the filter list.",
+  "info.thermal.item_servo_attachment.1": "Additional options can be used to fine-tune filtering.",
+  "info.thermal.item_servo_attachment.2": "Redstone Control is used to enable extraction.",
 
   "info.thermal.item_turbo_servo_attachment.0": "A much faster Servo, with limited filtering.",
-  "info.thermal.item_turbo_servo_attachment.1": "Place items containing fluid in the filter slot.",
+  "info.thermal.item_turbo_servo_attachment.1": "Place items in the filter slot.",
   "info.thermal.item_turbo_servo_attachment.2": "Additional options can be used to fine-tune filtering and extraction amount.",
   "info.thermal.item_turbo_servo_attachment.3": "Redstone Control is used to enable extraction.",
 
@@ -81,11 +71,9 @@
 
   "block.thermal.energy_duct.keyword": "energy rf transfer",
   "block.thermal.fluid_duct.keyword": "energy rf transfer",
-  "block.thermal.item_duct.keyword": "energy rf transfer",
 
   "block.thermal.energy_distributor.keyword": "energy rf transfer",
   "block.thermal.fluid_distributor.keyword": "fluid transfer",
-  "block.thermal.item_distributor.keyword": "item transfer",
 
   "block.thermal.ender_tunnel.keyword": "entangloporter quantum tesseract"
 }

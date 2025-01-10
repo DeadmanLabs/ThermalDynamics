@@ -1,0 +1,230 @@
+plugins {
+    id 'java'
+    id 'maven-publish'
+
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
+    id 'com.matthewprenger.cursegradle' version '1.4.0'
+    id 'com.modrinth.minotaur' version "2.+"
+
+    id 'net.neoforged.gradle' version '[6.0.18,6.2)'
+    id 'org.spongepowered.mixin' version '0.7-SNAPSHOT'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of("${java_version}")
+java.withSourcesJar()
+
+sourceSets.main.resources.srcDirs += "src/main/generated"
+
+group = 'com.teamcofh'
+archivesBaseName = "${mod_id}"
+def buildVersion = "${mod_version}." + (System.getenv("BUILD_NUMBER") ?: '0')
+version = "${mc_version}-${buildVersion}"
+
+if (System.getenv('CURSEFORGE_KEY') || project.hasProperty('curseforgeKey')) {
+    println "Enabling CurseForge config."
+    tasks.named('curseforge').configure { dependsOn(jar) }
+
+    curseforge {
+        apiKey = System.getenv("CURSEFORGE_KEY") ?: project.findProperty("curseforgeKey")
+
+        project {
+            id = '227443'
+            changelogType = 'markdown'
+            changelog = "[Changelog on GitHub - ${version}](https://raw.githubusercontent.com/cofh/version/main/${mod_id}/changelog.md)"
+            releaseType = "${release_type}"
+            mainArtifact(shadowJar)
+            addGameVersion "Java ${java_version}"
+            addGameVersion "${mc_version}"
+        }
+    }
+}
+
+if (System.getenv('MODRINTH_TOKEN') || project.hasProperty('modrinthToken')) {
+    println "Enabling Modrinth config."
+    tasks.named('modrinth').configure { dependsOn(jar) }
+
+    modrinth {
+        token = System.getenv("MODRINTH_TOKEN") ?: project.findProperty("modrinthToken")
+        projectId = 't8bmWGI2'
+        versionNumber = "${mod_version}"
+        versionType = "${release_type}"
+        changelog = "[Changelog on GitHub - ${version}](https://raw.githubusercontent.com/cofh/version/main/${mod_id}/changelog.md)"
+        uploadFile = shadowJar
+        gameVersions = ["${mc_version}"]
+    }
+}
+
+minecraft {
+    mappings channel: 'official', version: "${mc_version}"
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+    runs {
+        client {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            args '--username', 'Player'
+        }
+        server {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+        }
+    }
+}
+
+processResources {
+    filesMatching('META-INF/mods.toml') {
+        expand 'file': ['jarVersion': mod_version],
+                'mc_version': mc_version,
+                'forge_version': forge_version,
+                'forge_major_version': forge_version.split('\\.')[0],
+                'cofh_core_version_range': "[${cofh_core_version.replace(".+", "")},${cofh_core_max_version})",
+                'thermal_core_version_range': "[${thermal_core_version.replace(".+", "")},${thermal_core_max_version})"
+    }
+}
+
+configurations {
+    annotationProcessor.extendsFrom minecraft
+    shadowIn
+    implementation.extendsFrom shadowIn
+}
+
+repositories {
+    mavenLocal()
+    maven { url 'https://maven.covers1624.net/' }
+    maven { url 'https://maven.tterrag.com/' }
+    maven { url 'https://dvs1.progwml6.com/files/maven/' }
+    maven { url 'https://maven.blamejared.com/' }
+    maven { url 'https://maven.theillusivec4.top/' }
+}
+
+dependencies {
+    minecraft "net.neoforged:forge:${mc_version}-${neoforge_version}"
+
+    shadowIn 'net.covers1624:Quack:0.4.0.42' // Quack :D
+    compileOnly 'org.jetbrains:annotations:22.0.0'
+
+    implementation fg.deobf("com.teamcofh:cofh_core:${mc_version}-${cofh_core_version}.+")
+    implementation fg.deobf("com.teamcofh:thermal_core:${mc_version}-${thermal_core_version}.+")
+
+//    implementation fg.deobf("com.simibubi.create:create-${create_minecraft_version}:${create_version}:slim") { transitive = false }
+//    implementation fg.deobf("com.jozufozu.flywheel:flywheel-forge-${flywheel_minecraft_version}:${flywheel_version}")
+//    implementation fg.deobf("com.tterrag.registrate:Registrate:${registrate_version}")
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+reobf {
+    shadowJar {}
+    jar { enabled = false } // Disable jar.
+}
+
+jar.enabled = false
+shadowJar {
+    finalizedBy 'reobfShadowJar'
+    archiveClassifier = 'universal'
+    manifest {
+        attributes([
+                'Specification-Title'     : "${mod_name}",
+                'Specification-Vendor'    : 'Team CoFH',
+                'Specification-Version'   : "${mc_version}",
+                'Implementation-Title'    : "${mod_id}",
+                'Implementation-Vendor'   : 'Team CoFH',
+                'Implementation-Version'  : "${mod_version}",
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+    configurations = [project.configurations.shadowIn]
+    relocate 'net.covers1624.quack', 'cofh.requack'
+
+    doFirst {
+        exclude 'cofh/thermal/dynamics/data/**'
+        exclude '.cache/**'
+    }
+}
+
+tasks.register("signJar") {
+    dependsOn("shadowJar")
+    dependsOn("reobfJar")
+
+    doFirst {
+        def args = [:]
+        args['jar'] = jar.archiveFile.get().asFile
+        if (System.getenv("KEY_STORE")) {
+            args['keyStore'] = System.getenv("KEY_STORE")
+            file(System.getenv("KEY_STORE_PROPS")).withReader {
+                def props = new Properties()
+                props.load(it)
+                args.addAll(props)
+            }
+        } else if (project.hasProperty('keyStore')) {
+            args['keyStore'] = project.getProperty('keyStore')
+            args['alias'] = project.getProperty('keyStoreAlias')
+            args['storePass'] = project.getProperty('keyStorePass')
+            args['keyPass'] = project.getProperty('keyStoreKeyPass')
+        } else {
+            println "No signing properties."
+            state.setOutcome(org.gradle.api.internal.tasks.TaskExecutionOutcome.UP_TO_DATE)
+            didWork = false
+            return
+        }
+        project.ant.invokeMethod('signjar', args)
+    }
+}
+
+publishing {
+    repositories {
+        if (System.getenv('MAVEN_PASS')) {
+            maven {
+                url 'https://nexus.covers1624.net/repository/cofh-releases/'
+                credentials {
+                    username 'kinglemming'
+                    password System.getenv('MAVEN_PASS')
+                }
+            }
+        }
+    }
+    publications {
+        mod(MavenPublication) {
+            groupId project.group
+            artifactId project.archivesBaseName
+            version project.version
+            artifact shadowJar
+            artifact sourcesJar
+
+            pom {
+                name = archivesBaseName
+                description = archivesBaseName
+                url = "https://github.com/CoFH/${project.name}"
+                scm {
+                    url = "https://github.com/CoFH/${project.name}"
+                    connection = "scm:git:git://github.com/CoFH/${project.name}.git"
+                    connection = "scm:git:git@github.com:CoFH/${project.name}.git"
+                }
+
+                issueManagement {
+                    system = 'discord'
+                    url = 'https://discord.gg/uRKrnbH'
+                }
+                licenses {
+                    license {
+                        name = 'Don\'t Be a Jerk v2'
+                        url = "https://github.com/CoFH/${project.name}/blob/main/README.md"
+                        distribution = 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'teamcofh'
+                        name = 'Team CoFH'
+                    }
+                }
+            }
+        }
+    }
+}

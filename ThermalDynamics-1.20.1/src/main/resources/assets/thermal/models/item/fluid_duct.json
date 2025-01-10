@@ -1,0 +1,11 @@
+{
+  "parent": "thermal:block/duct_inventory",
+  "textures": {
+    "duct": "thermal:block/ducts/fluid_duct",
+    "duct_end": "thermal:block/ducts/fluid_duct_windowed",
+    "fill": "thermal:block/blank"
+  },
+  "visibility": {
+    "inv": true
+  }
+}

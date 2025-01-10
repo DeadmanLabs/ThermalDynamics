@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "C": {
+      "tag": "forge:ingots/signalum"
+    },
+    "I": {
+      "tag": "forge:ingots/tin"
+    },
+    "P": {
+      "tag": "minecraft:planks"
+    },
+    "Q": {
+      "tag": "forge:gems/quartz"
+    }
+  },
+  "pattern": [
+    "IQI",
+    "PCP",
+    "IQI"
+  ],
+  "result": {
+    "item": "thermal:item_buffer"
+  },
+  "show_notification": true
+}

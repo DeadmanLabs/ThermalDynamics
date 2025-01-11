@@ -12,7 +12,6 @@ import net.minecraftforge.registries.RegistryObject;
 import static cofh.thermal.core.ThermalCore.BLOCKS;
 import static cofh.thermal.core.ThermalCore.BLOCK_ENTITIES;
 import static cofh.thermal.dynamics.init.registries.TDynIDs.*;
-import sun.jvm.hotspot.debugger.cdbg.BlockSym;
 
 public class TDynBlockEntities {
 

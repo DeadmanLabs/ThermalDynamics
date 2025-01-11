@@ -126,6 +126,9 @@ reobf {
 
 jar.enabled = false
 shadowJar {
+    dependencies {
+        include(dependency('net.covers1624:Quack:0.4.0.42'))
+    }
     finalizedBy 'reobfShadowJar'
     archiveClassifier = 'universal'
     manifest {
@@ -140,8 +143,7 @@ shadowJar {
         ])
     }
     configurations = [project.configurations.shadowIn]
-    relocate 'net.covers1624.quack', 'cofh.requack'
-
+    
     doFirst {
         exclude 'cofh/thermal/dynamics/data/**'
         exclude '.cache/**'

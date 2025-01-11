@@ -68,12 +68,26 @@ public class TDynRecipeProvider extends RecipeProviderCoFH {
                 .unlockedBy("has_bronze", has(ItemTagsCoFH.INGOTS_BRONZE))
                 .save(consumer, ID_THERMAL + ":fluid_duct_4");
 
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT), 4)
+                .define('L', ItemTagsCoFH.INGOTS_LEAD)
+                .define('T', ItemTagsCoFH.INGOTS_TIN)
+                .pattern("TLT")
+                .unlockedBy("has_tin", has(ItemTagsCoFH.INGOTS_TIN))
+                .save(consumer, ID_THERMAL + ":item_duct_4");
+
         ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_FLUID_DUCT_WINDOWED), 4)
                 .define('G', ThermalTags.Items.HARDENED_GLASS)
                 .define('C', ItemTagsCoFH.INGOTS_BRONZE)
                 .pattern("CGC")
                 .unlockedBy("has_bronze", has(ItemTagsCoFH.INGOTS_BRONZE))
                 .save(consumer, ID_THERMAL + ":fluid_duct_windowed_4");
+
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_WINDOWED), 4)
+                .define('G', ThermalTags.Items.HARDENED_GLASS)
+                .define('T', ItemTagsCoFH.INGOTS_TIN)
+                .pattern("TGT")
+                .unlockedBy("has_tin", has(ItemTagsCoFH.INGOTS_TIN))
+                .save(consumer, ID_THERMAL + ":item_duct_windowed_4");
 
         ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ENERGY_LIMITER_ATTACHMENT), 2)
                 .define('G', Tags.Items.GLASS)

@@ -17,7 +17,6 @@ import static cofh.thermal.core.util.RegistrationHelper.registerBlock;
 import static cofh.thermal.dynamics.init.registries.TDynBlockEntities.*;
 import static cofh.thermal.dynamics.init.registries.TDynIDs.*;
 import static net.minecraft.world.level.block.state.BlockBehaviour.Properties.of;
-import sun.jvm.hotspot.debugger.cdbg.BlockSym;
 
 public class TDynBlocks {
 
@@ -44,7 +43,7 @@ public class TDynBlocks {
                 () -> new DuctBlockItem(BLOCKS.get(ID_FLUID_DUCT_WINDOWED), itemProperties()).setModId(ID_THERMAL_DYNAMICS)));
         devicesTab(50, registerBlock(ID_ITEM_DUCT,
                 () -> new DuctBlock(of().sound(SoundType.LANTERN).strength(1.0F).dynamicShape().noOcclusion(), ITEM_DUCT_BLOCK_ENTITY),
-                () -> DuctBlockItem(BLOCKS.get(ID_ITEM_DUCT), itemProperties()).setModId(ID_THERMAL_DYNAMICS)));
+                () -> new DuctBlockItem(BLOCKS.get(ID_ITEM_DUCT), itemProperties()).setModId(ID_THERMAL_DYNAMICS)));
         devicesTab(50, registerBlock(ID_ITEM_DUCT_WINDOWED,
                 () -> new DuctBlock(of().sound(SoundType.LANTERN).strength(1.0F).dynamicShape().noOcclusion(), ITEM_DUCT_WINDOWED_BLOCK_ENTITY),
                 () -> new DuctBlockItem(BLOCKS.get(ID_ITEM_DUCT_WINDOWED), itemProperties()).setModId(ID_THERMAL_DYNAMICS)));

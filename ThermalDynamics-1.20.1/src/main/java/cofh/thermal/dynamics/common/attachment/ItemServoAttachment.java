@@ -36,6 +36,12 @@ import static cofh.thermal.dynamics.init.registries.TDynIDs.ID_SERVO_ATTACHMENT;
 
 public class ItemServoAttachment implements IFilterableAttachment, IRedstoneControllableAttachment, IConveyableData, MenuProvider {
 
+    public static final int ITEM_TRANSFER_RATE = 10; // Example transfer rate for items
+
+    public int getTransfer() {
+        return ITEM_TRANSFER_RATE;
+    }
+
     public enum ServoMode {
         BIDIRECTIONAL, TO_EXTERNAL_ONLY, TO_GRID_ONLY;
 
@@ -126,17 +132,7 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     @Override
     public ResourceLocation getTexture() {
 
-        switch (mode) {
-            case TO_EXTERNAL_ONLY -> {
-                return rsControl.getState() ? SERVO_ATTACHMENT_TO_EXTERNAL_ACTIVE_LOC : SERVO_ATTACHMENT_TO_EXTERNAL_LOC;
-            }
-            case TO_GRID_ONLY -> {
-                return rsControl.getState() ? SERVO_ATTACHMENT_TO_GRID_ACTIVE_LOC : SERVO_ATTACHMENT_TO_GRID_LOC;
-            }
-            default -> {
-                return rsControl.getState() ? SERVO_ATTACHMENT_ACTIVE_LOC : SERVO_ATTACHMENT_LOC;
-            }
-        }
+        return rsControl.getState() ? SERVO_ATTACHMENT_ACTIVE_LOC : SERVO_ATTACHMENT_LOC;
     }
 
     @Override

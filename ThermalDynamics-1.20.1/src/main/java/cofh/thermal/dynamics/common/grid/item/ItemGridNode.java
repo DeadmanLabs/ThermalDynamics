@@ -10,6 +10,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 
+import net.minecraft.world.item.ItemStack;
+
 import static cofh.lib.util.Constants.DIRECTIONS;
 import static cofh.thermal.dynamics.api.grid.IDuct.ConnectionType.DISABLED;
 import static net.minecraftforge.fluids.capability.IFluidHandler.FluidAction.EXECUTE;
@@ -75,7 +77,16 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
         }
         attachment.wrapExternalCapability(ForgeCapabilities.ITEM_HANDLER,
                     tile.getCapability(ForgeCapabilities.ITEM_HANDLER, dir.getOpposite()))
-                .ifPresent(e -> grid.drain(e.fill(grid.getItem(), EXECUTE), EXECUTE));
+                .ifPresent(e -> {
+                    ItemStack stack = grid.getItem();
+                    for (int slot = 0; slot < e.getSlots(); slot++) {
+                        stack = e.insertItem(slot, stack, false);
+                        if (stack.isEmpty()) {
+                            break;
+                        }
+                    }
+                    grid.setItem(stack);
+                });
     }
 
 }

@@ -79,7 +79,7 @@ public final class ItemGridStorage implements IItemHandler, INBTSerializable<Com
     }
 
     public ItemGridStorage read(CompoundTag nbt) {
-        setItem(ItemStack.loadItemStackFromNBT(nbt));
+        setItem(ItemStack.of(nbt));
         this.baseCapacity = nbt.getInt(TAG_CAPACITY);
 
         this.averageOut = nbt.getInt(TAG_TRACK_OUT);
@@ -89,7 +89,7 @@ public final class ItemGridStorage implements IItemHandler, INBTSerializable<Com
     }
 
     public CompoundTag write(CompoundTag nbt) {
-        item.writeToNBT(nbt);
+        item.save(nbt);
         nbt.putInt(TAG_CAPACITY, baseCapacity);
 
         nbt.putInt(TAG_TRACK_OUT, averageOut);
@@ -107,87 +107,69 @@ public final class ItemGridStorage implements IItemHandler, INBTSerializable<Com
     }
 
     @Override
-    public int getStorage() {
+    public int getSlots() {
         return 1;
     }
 
     @Nonnull
     @Override
-    public ItemStack getItemsInStorage(int storage) {
+    public ItemStack getStackInSlot(int slot) {
         return item;
     }
 
+    @Nonnull
     @Override
-    public int fill(ItemStack resource, ItemAction action) {
-        if (resource.isEmpty() || !isItemValid(0, resource)) {
-            return 0;
+    public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
+        if (stack.isEmpty() || !isItemValid(slot, stack)) {
+            return stack;
         }
-        if (action.simulate()) {
+        if (simulate) {
             if (item.isEmpty()) {
-                return Math.min(capacity, resource.getCount());
+                return stack.getCount() <= capacity ? ItemStack.EMPTY : new ItemStack(stack.getItem(), stack.getCount() - capacity);
             }
-            if (!item.isItemEqual(resource)) {
-                return 0;
+            if (!ItemStack.isSameItem(item, stack)) {
+                return stack;
             }
-            return Math.min(capacity - item.getCount(), resource.getCount());
+            int space = capacity - item.getCount();
+            return stack.getCount() <= space ? ItemStack.EMPTY : new ItemStack(stack.getItem(), stack.getCount() - space);
         }
         if (item.isEmpty()) {
-            setItem(new ItemStack(resource, Math.min(capacity, resource.getCount())));
-            return item.getCount();
+            item = new ItemStack(stack.getItem(), Math.min(capacity, stack.getCount()));
+            return stack.getCount() <= capacity ? ItemStack.EMPTY : new ItemStack(stack.getItem(), stack.getCount() - capacity);
         }
-        if (!item.isItemEqual(resource)) {
-            return 0;
+        if (!ItemStack.isSameItem(item, stack)) {
+            return stack;
         }
-        if (item.getCount() >= capacity) {
-            return 0;
-        }
-        int filled = capacity - item.getCount();
-        if (resource.getAmount() < filled) {
-            item.grow(resource.getCount());
-            filled = resource.getCount();
-        } else {
-            item.setCount(capacity);
-        }
-        return filled;
+        int space = capacity - item.getCount();
+        int toInsert = Math.min(space, stack.getCount());
+        item.grow(toInsert);
+        return stack.getCount() <= toInsert ? ItemStack.EMPTY : new ItemStack(stack.getItem(), stack.getCount() - toInsert);
     }
 
     @Nonnull
     @Override
-    public ItemStack drain(ItemStack resource, ItemAction action) {
-        if (resource.isEmpty() || !resource.isItemEqual(item)) {
+    public ItemStack extractItem(int slot, int amount, boolean simulate) {
+        if (amount <= 0 || item.isEmpty()) {
             return ItemStack.EMPTY;
         }
-        return drain(resource.getCount(), action);
-    }
-
-    @Nonnull
-    @Override
-    public ItemStack drain(int maxDrain, ItemAction action) {
-        if (maxDrain <= 0 || item.isEmpty()) {
-            return ItemStack.EMPTY;
-        }
-        int drained = maxDrain;
-        if (item.getCount() < drained) {
-            drained = item.getCount();
-        }
-        ItemStack stack = new ItemStack(item, drained);
-        if (action.execute()) {
-            item.shrink(drained);
+        int toExtract = Math.min(amount, item.getCount());
+        ItemStack extracted = new ItemStack(item.getItem(), toExtract);
+        if (!simulate) {
+            item.shrink(toExtract);
             if (item.isEmpty()) {
-                setItem(ItemStack.EMPTY);
+                item = ItemStack.EMPTY;
             }
         }
-        return stack;
+        return extracted;
     }
 
     @Override
-    public int getStorageCapacity(int storage) {
+    public int getSlotLimit(int slot) {
         return capacity;
     }
 
     @Override
-    public boolean isItemValid(int storage, @Nonnull ItemStack stack) {
+    public boolean isItemValid(int slot, @Nonnull ItemStack stack) {
         return true;
     }
 }
-

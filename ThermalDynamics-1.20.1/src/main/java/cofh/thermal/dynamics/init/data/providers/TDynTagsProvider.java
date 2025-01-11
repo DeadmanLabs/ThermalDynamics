@@ -16,8 +16,6 @@ import java.util.concurrent.CompletableFuture;
 import static cofh.lib.util.constants.ModIds.ID_THERMAL;
 import static cofh.thermal.core.ThermalCore.BLOCKS;
 import static cofh.thermal.dynamics.init.registries.TDynIDs.*;
-import jdk.internal.classfile.CodeBuilder;
-import sun.jvm.hotspot.debugger.cdbg.BlockSym;
 
 public class TDynTagsProvider {
 

@@ -32,7 +32,7 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
         if (!connections[dir.ordinal()].allowBlockConnection()) {
             return false;
         }
-        BlockEntity tile = Level.getBlockEntity(getBlockPos().relative(dir));
+        BlockEntity tile = level.getBlockEntity(getBlockPos().relative(dir));
         if (tile == null || GridHelper.getGridHost(tile) != null) {
             return false;
         }
@@ -53,6 +53,6 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
                 return false;
             }
         }
-        return Superclass.canConnectTo(other, dir);
+        return super.canConnectTo(other, dir);
     }
 }

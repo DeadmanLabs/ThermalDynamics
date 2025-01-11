@@ -4,16 +4,19 @@
   "_comment": "========================================================================================================",
 
   "attachment.thermal.energy_limiter": "Redstone Flux Limiter",
-  "attachment.thermal.filter": "Fluiduct Filter",
-  "attachment.thermal.servo": "Fluiduct Servo",
-  "attachment.thermal.turbo_servo": "Fluiduct Turbo-Servo",
+  "attachment.thermal.filter": "Duct Filter",
+  "attachment.thermal.servo": "Duct Servo",
+  "attachment.thermal.turbo_servo": "Duct Turbo-Servo",
 
   "block.thermal.energy_duct": "Fluxduct",
   "block.thermal.fluid_duct": "Fluiduct",
   "block.thermal.fluid_duct_windowed": "Fluiduct (Windowed)",
+  "block.thermal.item_duct": "Itemduct",
+  "block.thermal.item_duct_windowed": "Itemduct (Windowed)",
 
   "block.thermal.energy_distributor": "RF Distribution Interface",
   "block.thermal.fluid_distributor": "Fluid Distribution Interface",
+  "block.thermal.item_distributor": "Item Distribution Interface",
 
   "block.thermal.item_buffer": "Logistical Item Buffer",
 

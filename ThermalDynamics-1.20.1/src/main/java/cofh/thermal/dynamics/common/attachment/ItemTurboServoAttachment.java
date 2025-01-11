@@ -36,6 +36,15 @@ import static cofh.thermal.dynamics.init.registries.TDynIDs.ID_TURBO_SERVO_ATTAC
 
 public class ItemTurboServoAttachment implements IFilterableAttachment, IRedstoneControllableAttachment, IConveyableData, MenuProvider {
 
+    public static final int ITEM_TRANSFER_RATE = 20; // Example transfer rate for items
+    public static final int MAX_ITEM_TRANSFER_RATE = 100; // Example max transfer rate
+
+    public int amountTransfer = ITEM_TRANSFER_RATE;
+
+    public int getMaxTransfer() {
+        return MAX_ITEM_TRANSFER_RATE;
+    }
+
     public enum TurboServoMode {
         BIDIRECTIONAL, TO_EXTERNAL_ONLY, TO_GRID_ONLY;
 
@@ -126,17 +135,7 @@ public class ItemTurboServoAttachment implements IFilterableAttachment, IRedston
     @Override
     public ResourceLocation getTexture() {
 
-        switch (mode) {
-            case TO_EXTERNAL_ONLY -> {
-                return rsControl.getState() ? TURBO_SERVO_ATTACHMENT_TO_EXTERNAL_ACTIVE_LOC : TURBO_SERVO_ATTACHMENT_TO_EXTERNAL_LOC;
-            }
-            case TO_GRID_ONLY -> {
-                return rsControl.getState() ? TURBO_SERVO_ATTACHMENT_TO_GRID_ACTIVE_LOC : TURBO_SERVO_ATTACHMENT_TO_GRID_LOC;
-            }
-            default -> {
-                return rsControl.getState() ? TURBO_SERVO_ATTACHMENT_ACTIVE_LOC : TURBO_SERVO_ATTACHMENT_LOC;
-            }
-        }
+        return rsControl.getState() ? TURBO_SERVO_ATTACHMENT_ACTIVE_LOC : TURBO_SERVO_ATTACHMENT_LOC;
     }
 
     @Override

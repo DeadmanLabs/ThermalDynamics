@@ -10,6 +10,9 @@ import cofh.thermal.dynamics.client.gui.attachment.EnergyLimiterAttachmentScreen
 import cofh.thermal.dynamics.client.gui.attachment.FluidFilterAttachmentScreen;
 import cofh.thermal.dynamics.client.gui.attachment.FluidServoAttachmentScreen;
 import cofh.thermal.dynamics.client.gui.attachment.FluidTurboServoAttachmentScreen;
+import cofh.thermal.dynamics.client.gui.attachment.ItemFilterAttachmentScreen;
+import cofh.thermal.dynamics.client.gui.attachment.ItemServoAttachmentScreen;
+import cofh.thermal.dynamics.client.gui.attachment.ItemTurboServoAttachmentScreen;
 import cofh.thermal.dynamics.common.event.GridEvents;
 import cofh.thermal.dynamics.common.network.packet.client.AttachmentControlPacket;
 import cofh.thermal.dynamics.common.network.packet.client.GridDebugPacket;
@@ -127,6 +130,9 @@ public class ThermalDynamics {
         MenuScreens.register(FLUID_FILTER_ATTACHMENT_CONTAINER.get(), FluidFilterAttachmentScreen::new);
         MenuScreens.register(FLUID_SERVO_ATTACHMENT_CONTAINER.get(), FluidServoAttachmentScreen::new);
         MenuScreens.register(FLUID_TURBO_SERVO_ATTACHMENT_CONTAINER.get(), FluidTurboServoAttachmentScreen::new);
+        MenuScreens.register(ITEM_FILTER_ATTACHMENT_CONTAINER.get(), ItemFilterAttachmentScreen::new);
+        MenuScreens.register(ITEM_SERVO_ATTACHMENT_CONTAINER.get(), ItemServoAttachmentScreen::new);
+        MenuScreens.register(ITEM_TURBO_SERVO_ATTACHMENT_CONTAINER.get(), ItemTurboServoAttachmentScreen::new);
     }
 
     private void registerRenderLayers() {

@@ -109,24 +109,64 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> implements IItemHandl
 
     private void renderUpdate() {
         prevRenderItem = renderItem;
-        renderItem = new ItemStack(getItem(), amount); //amount might be not needed
+        renderItem = new ItemStack(getItem().getItem(), getItem().getCount());
 
-        if (!ItemHelper.)
+        if (!ItemHelper.itemsEqual(prevRenderItem, renderItem) || wasFilled && timeTracker.hasDelayPassed(world, 40) || needsUpdate) {
+            if (!wasFilled && renderItem.isEmpty()) {
+                timeTracker.markTime(world);
+                wasFilled = true;
+                return;
+            }
+            updateHosts();
+            wasFilled = false;
+            needsUpdate = false;
+        }
     }
 
     @Override
     public void onModified() {
-
+        distArray = new ItemGridNode[0];
+        storage.setBaseCapacity(Math.max(NODE_CAPACITY, getNodes().size() * NODE_CAPACITY));
+        super.onModified();
     }
 
     @Override
     public void onMerge(ItemGrid from) {
+        storage.setBaseCapacity(Math.max(NODE_CAPACITY, getNodes().size() * NODE_CAPACITY));
+        storage.setCapacity(this.getCapacity() + from.getCapacity());
+        storage.setItem(new ItemStack(storage.getItem().getItem(), this.getItemAmount() + from.getItemAmount()));
 
+        needsUpdate = true;
+
+        refreshCapabilities();
+        from.refreshCapabilities();
     }
 
     @Override
     public void onSplit(List<ItemGrid> others) {
+        int totalNodes = 0;
+        for (ItemGrid grid : others) {
+            int gridNodes = grid.getNodes().size();
+            totalNodes += grid.getNodes().size();
+            grid.setBaseCapacity(Math.max(NODE_CAPACITY, gridNodes * NODE_CAPACITY));
+            grid.setCapacity(this.getCapacity());
+            if (!this.renderItem.isEmpty()) {
+                grid.needsUpdate = true;
+            }
+            grid.refreshCapabilities();
+        }
+        this.refreshCapabilities();
+        if (getItem().isEmpty()) {
+            return;
+        }
+        int itemsPerNode = getItem().getCount() / totalNodes;
+        int remItems = getItem().getCount() % totalNodes;
 
+        for (ItemGrid grid : others) {
+            int gridNodes = grid.getNodes().size();
+            grid.setItem(new ItemStack(getItem().getItem(), (itemsPerNode * gridNodes)));
+        }
+        others.get(0).setItem(new ItemStack(getItem().getItem(), others.get(0).getItem().getCount() + remItems));
     }
 
     @Override
@@ -174,17 +214,16 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> implements IItemHandl
     public int getCapacity() { return storage.getCapacity(); }
     public ItemStack getItem() { return storage.getItem(); }
     public ItemStack getRenderItem() { return renderItem; }
-    public int getItemAmount() { return storage.getItem().getAmount(); }
+    public int getItemAmount() { return storage.getItem().getCount(); }
     public void setBaseCapacity(int baseCapacity) { storage.setBaseCapacity(baseCapacity); }
     public void setCapacity(int capacity) { storage.setCapacity(capacity); }
     public void setItem(ItemStack item) { storage.setItem(item); }
 
-    @Override public int getStorages() { return storage.getStorages(); }
-    @Override public ItemStack getItemInStorage(int storage) { return storage.getItemInStorage(storage); }
-    @Override public int fill(ItemStack resource, ItemAction action) { return storage.fill(resource, action); }
-    @Override public ItemStack drain (ItemStack resource, ItemAction action) { return storage.drain(resource, action); }
-    @Override public ItemStack drain (int maxDrain, ItemAction action) { return storage.drain(maxDrain, action); }
-    @Override public int getStorageCapacity(int storage) { return storage.getStorageCapacity(storage); }
-    @Override public boolean isItemValid(int storage, @Nonnull ItemStack stack) { return storage.isItemValid(storage, stack); } 
+    @Override public int getSlots() { return storage.getSlots(); }
+    @Override public ItemStack getStackInSlot(int slot) { return storage.getStackInSlot(slot); }
+    @Override public ItemStack insertItem(int slot, @Nonnull ItemStack stack, boolean simulate) { return storage.insertItem(slot, stack, simulate); }
+    @Override public ItemStack extractItem(int slot, int amount, boolean simulate) { return storage.extractItem(slot, amount, simulate); }
+    @Override public int getSlotLimit(int slot) { return storage.getSlotLimit(slot); }
+    @Override public boolean isItemValid(int slot, @NotNull ItemStack stack) { return storage.isItemValid(slot, stack); }
     //@formatter:on
 }

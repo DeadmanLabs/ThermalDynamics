@@ -12,6 +12,7 @@ import cofh.thermal.core.common.item.RedprintItem;
 import cofh.thermal.dynamics.api.grid.IDuct;
 import cofh.thermal.dynamics.api.grid.IGridContainer;
 import cofh.thermal.dynamics.api.helper.GridHelper;
+import cofh.thermal.dynamics.api.TDynApi;
 import cofh.thermal.dynamics.client.model.data.DuctModelData;
 import cofh.thermal.dynamics.common.attachment.*;
 import cofh.thermal.dynamics.common.grid.Grid;
@@ -129,16 +130,33 @@ public abstract class DuctBlockEntity<G extends Grid<G, N>, N extends GridNode<G
     }
 
     public boolean attemptAttachmentInstall(Direction side, Player player, String type) {
-
+        System.out.println("=== attemptAttachmentInstall called ===");
+        System.out.println("Type: " + type);
+        System.out.println("Side: " + side);
+        System.out.println("Current attachment on side: " + attachments[side.ordinal()]);
+        System.out.println("Is EmptyAttachment: " + (attachments[side.ordinal()] == EmptyAttachment.INSTANCE));
+        
         if (attachments[side.ordinal()] != EmptyAttachment.INSTANCE) {
+            System.out.println("Side already has attachment, returning false");
             return false;
         }
+        
+        System.out.println("Calling AttachmentRegistry.getAttachment...");
         IAttachment attachment = AttachmentRegistry.getAttachment(type, new CompoundTag(), this, side);
+        System.out.println("AttachmentRegistry returned: " + attachment);
+        System.out.println("Attachment class: " + (attachment != null ? attachment.getClass().getSimpleName() : "null"));
+        System.out.println("Is null: " + (attachment == null));
+        System.out.println("Is EmptyAttachment: " + (attachment == EmptyAttachment.INSTANCE));
+        
         if (attachment == null || attachment == EmptyAttachment.INSTANCE) {
+            System.out.println("Attachment is null or empty, returning false");
             return false;
         }
+        
+        System.out.println("Installing attachment...");
         attachments[side.ordinal()] = attachment;
         connections[side.ordinal()] = FORCED;
+        System.out.println("Attachment installed successfully!");
 
         ItemStack offhand = player.getItemInHand(InteractionHand.OFF_HAND);
         if (offhand.hasTag() && offhand.getItem() instanceof RedprintItem) {
@@ -149,6 +167,7 @@ public abstract class DuctBlockEntity<G extends Grid<G, N>, N extends GridNode<G
 
         // TODO: Send FULL Update Packet
         TileStatePacket.sendToClient(this);
+        System.out.println("=== attemptAttachmentInstall returning true ===");
         return true;
     }
 
@@ -201,7 +220,6 @@ public abstract class DuctBlockEntity<G extends Grid<G, N>, N extends GridNode<G
     }
 
     public boolean openAttachmentGui(Direction side, Player player) {
-
         if (side != null && attachments[side.ordinal()] instanceof MenuProvider provider) {
             AttachmentHelper.openAttachmentScreen((ServerPlayer) player, provider, pos(), side);
             return true;
@@ -341,7 +359,6 @@ public abstract class DuctBlockEntity<G extends Grid<G, N>, N extends GridNode<G
 
     @Override
     public void handleStatePacket(FriendlyByteBuf buffer) {
-
         for (int i = 0; i < 6; ++i) {
             connections[i] = ConnectionType.VALUES[buffer.readByte()];
         }
@@ -545,6 +562,11 @@ public abstract class DuctBlockEntity<G extends Grid<G, N>, N extends GridNode<G
     @Override
     public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
 
+        // Provide self as IDuct capability
+        if (cap == TDynApi.GRID_HOST_CAPABILITY) {
+            return LazyOptional.of(() -> this).cast();
+        }
+        
         if (side == null || level == null || level.isClientSide || connections[side.ordinal()] == DISABLED || getGrid() == null) {
             return LazyOptional.empty();
         }

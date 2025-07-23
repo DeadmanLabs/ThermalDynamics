@@ -9,7 +9,10 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -23,6 +26,8 @@ import static cofh.thermal.dynamics.init.registries.TDynGrids.ENERGY_GRID;
  */
 public class EnergyGrid extends Grid<EnergyGrid, EnergyGridNode> implements IRedstoneFluxStorage {
 
+    private static final Logger LOGGER = LogManager.getLogger();
+    
     protected static final long MIN_CAPACITY = 10000;
     protected static final long NODE_CAPACITY = 400;
 
@@ -152,12 +157,25 @@ public class EnergyGrid extends Grid<EnergyGrid, EnergyGridNode> implements IRed
     public boolean canConnectOnSide(BlockEntity tile, @Nullable Direction dir) {
 
         if (GridHelper.getGridHost(tile) != null) {
+            LOGGER.debug("EnergyGrid cannot connect to tile at {} (direction: {}): tile is already part of a grid",
+                    tile.getBlockPos(), dir);
             return false; // We cannot externally connect to other grids.
         }
+        
+        boolean canConnect = false;
+        boolean hasThermalCapability = false;
+        boolean hasForgeCapability = false;
+        
         if (dir != null) {
-            return tile.getCapability(ThermalEnergyHelper.getBaseEnergySystem(), dir).isPresent();
+            hasThermalCapability = tile.getCapability(ThermalEnergyHelper.getBaseEnergySystem(), dir).isPresent();
+            hasForgeCapability = tile.getCapability(ForgeCapabilities.ENERGY, dir).isPresent();
+            canConnect = hasThermalCapability || hasForgeCapability;
         }
-        return false;
+        
+        LOGGER.debug("EnergyGrid checking connection to tile at {} (direction: {}): tile={}, hasThermalCapability={}, hasForgeCapability={}, hasAnyEnergyCapability={}",
+                tile.getBlockPos(), dir, tile.getClass().getSimpleName(), hasThermalCapability, hasForgeCapability, canConnect);
+        
+        return canConnect;
         // return tile.getCapability(ThermalEnergyHelper.getBaseEnergySystem()).isPresent();
     }
 

@@ -8,6 +8,7 @@ import net.minecraft.nbt.CompoundTag;
 import java.util.Map;
 
 import static cofh.thermal.dynamics.init.registries.TDynGrids.FLUID_GRID;
+import static cofh.thermal.dynamics.init.registries.TDynGrids.ITEM_GRID;
 import static cofh.thermal.dynamics.init.registries.TDynIDs.*;
 
 public class AttachmentRegistry {
@@ -15,6 +16,8 @@ public class AttachmentRegistry {
     public static final IAttachmentFactory<IAttachment> FILTER_FACTORY = ((nbt, duct, side) -> {
         if (duct.getGridType() == FLUID_GRID.get()) {
             return new FluidFilterAttachment(duct, side).read(nbt);
+        } else if (duct.getGridType() == ITEM_GRID.get()) {
+            return new ItemFilterAttachment(duct, side).read(nbt);
         }
         return EmptyAttachment.INSTANCE;
     });
@@ -22,6 +25,8 @@ public class AttachmentRegistry {
     public static final IAttachmentFactory<IAttachment> SERVO_FACTORY = ((nbt, duct, side) -> {
         if (duct.getGridType() == FLUID_GRID.get()) {
             return new FluidServoAttachment(duct, side).read(nbt);
+        } else if (duct.getGridType() == ITEM_GRID.get()) {
+            return new ItemServoAttachment(duct, side).read(nbt);
         }
         return EmptyAttachment.INSTANCE;
     });
@@ -29,6 +34,8 @@ public class AttachmentRegistry {
     public static final IAttachmentFactory<IAttachment> TURBO_SERVO_FACTORY = ((nbt, duct, side) -> {
         if (duct.getGridType() == FLUID_GRID.get()) {
             return new FluidTurboServoAttachment(duct, side).read(nbt);
+        } else if (duct.getGridType() == ITEM_GRID.get()) {
+            return new ItemTurboServoAttachment(duct, side).read(nbt);
         }
         return EmptyAttachment.INSTANCE;
     });
@@ -52,10 +59,20 @@ public class AttachmentRegistry {
     }
 
     public static IAttachment getAttachment(String type, CompoundTag nbt, IDuct<?, ?> duct, Direction side) {
-
+        System.out.println("=== AttachmentRegistry.getAttachment ===");
+        System.out.println("Type: " + type);
+        System.out.println("Duct grid type: " + duct.getGridType());
+        System.out.println("Available factories: " + ATTACHMENT_FACTORY_MAP.keySet());
+        System.out.println("Contains factory for " + type + ": " + ATTACHMENT_FACTORY_MAP.containsKey(type));
+        
         if (ATTACHMENT_FACTORY_MAP.containsKey(type)) {
-            return ATTACHMENT_FACTORY_MAP.get(type).createAttachment(nbt, duct, side);
+            System.out.println("Factory found, calling createAttachment...");
+            IAttachment result = ATTACHMENT_FACTORY_MAP.get(type).createAttachment(nbt, duct, side);
+            System.out.println("Factory returned: " + result);
+            System.out.println("Result class: " + (result != null ? result.getClass().getSimpleName() : "null"));
+            return result;
         }
+        System.out.println("No factory found, returning EmptyAttachment");
         return EmptyAttachment.INSTANCE;
     }
 

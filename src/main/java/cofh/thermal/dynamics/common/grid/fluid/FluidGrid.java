@@ -199,12 +199,20 @@ public class FluidGrid extends Grid<FluidGrid, FluidGridNode> implements IFluidH
     public boolean canConnectOnSide(BlockEntity tile, @Nullable Direction dir) {
 
         if (GridHelper.getGridHost(tile) != null) {
+            LOGGER.debug("FluidGrid cannot connect to tile at {} (direction: {}): tile is already part of a grid",
+                    tile.getBlockPos(), dir);
             return false; // We cannot externally connect to other grids.
         }
+        
+        boolean canConnect = false;
         if (dir != null) {
-            return tile.getCapability(ForgeCapabilities.FLUID_HANDLER, dir).isPresent();
+            canConnect = tile.getCapability(ForgeCapabilities.FLUID_HANDLER, dir).isPresent();
         }
-        return false;
+        
+        LOGGER.debug("FluidGrid checking connection to tile at {} (direction: {}): tile={}, hasFluidCapability={}",
+                tile.getBlockPos(), dir, tile.getClass().getSimpleName(), canConnect);
+        
+        return canConnect;
         // return tile.getCapability(ForgeCapabilities.FLUID_HANDLER).isPresent();
     }
 

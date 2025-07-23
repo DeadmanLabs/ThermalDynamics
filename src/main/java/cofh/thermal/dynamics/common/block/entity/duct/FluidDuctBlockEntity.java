@@ -13,11 +13,15 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.fluids.FluidStack;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import static cofh.thermal.dynamics.init.registries.TDynBlockEntities.FLUID_DUCT_BLOCK_ENTITY;
 import static cofh.thermal.dynamics.init.registries.TDynGrids.FLUID_GRID;
 
 public class FluidDuctBlockEntity extends DuctBlockEntity<FluidGrid, FluidGridNode> {
+
+    private static final Logger LOGGER = LogManager.getLogger();
 
     public FluidDuctBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
 
@@ -39,7 +43,14 @@ public class FluidDuctBlockEntity extends DuctBlockEntity<FluidGrid, FluidGridNo
         if (tile == null || GridHelper.getGridHost(tile) != null) {
             return false;
         }
-        return tile.getCapability(ForgeCapabilities.FLUID_HANDLER, dir.getOpposite()).isPresent();
+        
+        boolean hasCapability = tile.getCapability(ForgeCapabilities.FLUID_HANDLER, dir.getOpposite()).isPresent();
+        
+        LOGGER.debug("FluidDuct at {} checking connection to block at {} (direction: {}): tile={}, hasFluidCapability={}",
+                getBlockPos(), getBlockPos().relative(dir), dir, 
+                tile != null ? tile.getClass().getSimpleName() : "null", hasCapability);
+        
+        return hasCapability;
     }
 
     // region IGridHost

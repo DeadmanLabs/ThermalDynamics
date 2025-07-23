@@ -9,11 +9,16 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import static cofh.thermal.dynamics.init.registries.TDynBlockEntities.ENERGY_DUCT_BLOCK_ENTITY;
 import static cofh.thermal.dynamics.init.registries.TDynGrids.ENERGY_GRID;
 
 public class EnergyDuctBlockEntity extends DuctBlockEntity<EnergyGrid, EnergyGridNode> {
+
+    private static final Logger LOGGER = LogManager.getLogger();
 
     public EnergyDuctBlockEntity(BlockPos pos, BlockState state) {
 
@@ -30,7 +35,18 @@ public class EnergyDuctBlockEntity extends DuctBlockEntity<EnergyGrid, EnergyGri
         if (tile == null || GridHelper.getGridHost(tile) != null) {
             return false;
         }
-        return tile.getCapability(ThermalEnergyHelper.getBaseEnergySystem(), dir.getOpposite()).isPresent();
+        
+        // Check both thermal energy capability and standard Forge energy capability
+        boolean hasThermalCapability = tile.getCapability(ThermalEnergyHelper.getBaseEnergySystem(), dir.getOpposite()).isPresent();
+        boolean hasForgeCapability = tile.getCapability(ForgeCapabilities.ENERGY, dir.getOpposite()).isPresent();
+        boolean hasCapability = hasThermalCapability || hasForgeCapability;
+        
+        LOGGER.debug("EnergyDuct at {} checking connection to block at {} (direction: {}): tile={}, hasThermalCapability={}, hasForgeCapability={}, hasAnyEnergyCapability={}",
+                getBlockPos(), getBlockPos().relative(dir), dir, 
+                tile != null ? tile.getClass().getSimpleName() : "null", 
+                hasThermalCapability, hasForgeCapability, hasCapability);
+        
+        return hasCapability;
     }
 
     @Override

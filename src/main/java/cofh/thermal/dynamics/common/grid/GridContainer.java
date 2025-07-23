@@ -12,7 +12,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.graph.EndpointPair;
 import io.netty.buffer.Unpooled;
-import net.covers1624.quack.collection.ColUtils;
+// Removed ColUtils import - using standard Java instead
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -29,11 +29,12 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Comparator;
 
 import static cofh.lib.util.Constants.DIRECTIONS;
 import static cofh.thermal.core.ThermalCore.LOG;
 import static cofh.thermal.dynamics.api.helper.GridHelper.*;
-import static net.covers1624.quack.util.SneakyUtils.unsafeCast;
+// Removed SneakyUtils import - using standard casts instead
 
 /**
  * @author covers1624
@@ -98,7 +99,7 @@ public class GridContainer implements IGridContainer, INBTSerializable<ListTag> 
                 continue; // Not allowed to connect.
             }
 
-            IDuct<G, N> otherHost = unsafeCast(other); // Guaranteed safe by canConnectTo
+            IDuct<G, N> otherHost = (IDuct<G, N>) other; // Guaranteed safe by canConnectTo
 
             if (other.getGrid() != host.getGrid()) {
                 // Merge into the other grid.
@@ -136,7 +137,9 @@ public class GridContainer implements IGridContainer, INBTSerializable<ListTag> 
         }
 
         // Choose the largest grid as the 'main' grid.
-        G main = ColUtils.maxBy(grids, e -> e.nodeGraph.nodes().size());
+        G main = grids.stream()
+            .max(Comparator.comparingInt(e -> e.nodeGraph.nodes().size()))
+            .orElse(null);
         assert main != null;
 
         grids.remove(main);
@@ -477,7 +480,7 @@ public class GridContainer implements IGridContainer, INBTSerializable<ListTag> 
         if (grid.getGridType() != type) {
             throw new IllegalStateException("Grid at position " + pos + " is not of type " + type + ". Got: " + grid.getGridType());
         }
-        return unsafeCast(grid);
+        return (G) grid;
     }
 
     @Override
@@ -509,16 +512,17 @@ public class GridContainer implements IGridContainer, INBTSerializable<ListTag> 
                 LOGGER.error("Failed to load Grid {} with type {} in world {}. GridType is no longer registered, it will be removed from the world.", id, gridTypeName, world.dimension().location());
                 continue;
             }
-            deserializeGrid(tag, id, unsafeCast(gridType));
+            deserializeGrid(tag, id, gridType);
         }
         if (DEBUG) {
             LOGGER.info("Loaded {} grids for {}.", grids.size(), world.dimension().location());
         }
     }
 
-    private <G extends Grid<G, N>, N extends GridNode<G>> void deserializeGrid(CompoundTag tag, UUID id, IGridType<G> gridType) {
+    @SuppressWarnings("unchecked")
+    private <G extends Grid<G, N>, N extends GridNode<G>> void deserializeGrid(CompoundTag tag, UUID id, IGridType<?> gridType) {
 
-        G grid = createAndAddGrid(id, gridType, false);
+        G grid = createAndAddGrid(id, (IGridType<G>) gridType, false);
         grid.deserializeNBT(tag);
 
         for (N node : grid.nodeGraph.nodes()) {
@@ -587,7 +591,7 @@ public class GridContainer implements IGridContainer, INBTSerializable<ListTag> 
         for (Direction dir : DIRECTIONS) {
             IDuct<?, ?> other = GridHelper.getGridHost(world, host.getHostPos().relative(dir));
             if (other != null && canConnectTo(host, other, dir)) {
-                adjacentGrids.put(dir, unsafeCast(other)); // canConnectTo asserts both grids are of the same type.
+                adjacentGrids.put(dir, (IDuct<G, N>) other); // canConnectTo asserts both grids are of the same type.
             }
         }
         return adjacentGrids;

@@ -31,7 +31,7 @@ import java.util.function.LongFunction;
 import static cofh.lib.util.Constants.DIRECTIONS;
 import static cofh.thermal.dynamics.api.helper.GridHelper.numBetween;
 import static java.util.Objects.requireNonNull;
-import static net.covers1624.quack.util.SneakyUtils.unsafeCast;
+// Removed SneakyUtils import - using standard casts instead
 
 /**
  * Represents a Grid of nodes in a World.
@@ -331,17 +331,17 @@ public abstract class Grid<G extends Grid<G, N>, N extends GridNode<G>> implemen
         other.nodeGraph.nodes().forEach(e -> positionCollector.collectPosition(e.getPos()));
 
         // Iterate all in-world nodes and update the tracked grid.
-        updateGridHosts(world, positionCollector.getChunkPositions(), unsafeCast(this));
+        updateGridHosts(world, positionCollector.getChunkPositions(), (G) this);
 
         // Insert all nodes into the Grid's lookup maps and update the node about the grid change.
         for (N node : other.nodeGraph.nodes()) {
             insertExistingNode(node);
             nodeGraph.addNode(node);
-            node.setGrid(unsafeCast(this));
-            node.onGridChange(unsafeCast(other));
+            node.setGrid((G) this);
+            node.onGridChange((G) other);
         }
         updatableHosts.addAll(other.updatableHosts);
-        onMerge(unsafeCast(other));
+        onMerge((G) other);
     }
 
     // Called to split the current grid into the specified partitions.
@@ -383,14 +383,16 @@ public abstract class Grid<G extends Grid<G, N>, N extends GridNode<G>> implemen
 
             // Insert all nodes into the Grid's lookup maps and update the node about the grid change.
             for (GridNode<?> node : splitGraph) {
-                node.setGrid(unsafeCast(newGrid));
-                node.onGridChange(unsafeCast(this));
+                @SuppressWarnings("unchecked")
+                N typedNode = (N) node;
+                typedNode.setGrid(newGrid);
+                typedNode.onGridChange((G) this);
             }
             newGrids.add(newGrid);
         }
 
         // Notify the current grid it has been split.
-        onSplit(unsafeCast(newGrids));
+        onSplit((List<G>) newGrids);
         return newGrids;
     }
 
@@ -449,7 +451,9 @@ public abstract class Grid<G extends Grid<G, N>, N extends GridNode<G>> implemen
                     LOGGER.error("Node not connected to grid! Chunk modified externally. {}", pos);
                     continue;
                 }
-                gridHost.setGrid(unsafeCast(grid));
+                @SuppressWarnings({"unchecked", "rawtypes"})
+                IDuct rawGridHost = gridHost;
+                rawGridHost.setGrid(grid);
             }
         }
     }

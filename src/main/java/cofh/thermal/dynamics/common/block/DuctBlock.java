@@ -11,6 +11,7 @@ import cofh.thermal.core.common.item.RedprintItem;
 import cofh.thermal.dynamics.api.grid.IDuct;
 import cofh.thermal.dynamics.api.grid.IGridContainer;
 import cofh.thermal.dynamics.api.grid.IGridHostLuminous;
+import cofh.thermal.dynamics.client.model.data.DuctModelData;
 import cofh.thermal.dynamics.common.block.entity.duct.DuctBlockEntity;
 import cofh.thermal.dynamics.common.item.AttachmentItem;
 import com.google.common.collect.ImmutableSet;
@@ -119,13 +120,32 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
 
     @Override
     public InteractionResult use(BlockState state, Level worldIn, BlockPos pos, Player player, InteractionHand handIn, BlockHitResult hit) {
+        
+        System.out.println("=== DuctBlock.use() called ===");
+        System.out.println("Block at " + pos + " class: " + this.getClass().getSimpleName());
+        System.out.println("World isClientSide: " + worldIn.isClientSide);
+        
+        ItemStack heldStack = player.getItemInHand(handIn);
+        System.out.println("Player holding: " + heldStack.getItem() + " (class: " + heldStack.getItem().getClass().getSimpleName() + ")");
+        System.out.println("Is AttachmentItem: " + (heldStack.getItem() instanceof AttachmentItem));
+        if (heldStack.getItem() instanceof AttachmentItem attachmentItem) {
+            System.out.println("Attachment type from item: " + attachmentItem.getAttachmentType(heldStack));
+        }
 
         if (worldIn.getBlockEntity(pos) instanceof DuctBlockEntity<?, ?> duct) {
+            System.out.println("Found DuctBlockEntity: " + duct.getClass().getSimpleName());
+            System.out.println("Duct grid type: " + duct.getGridType());
+            
             duct.calcDuctModelDataServer();
             HitResult rawHit = RayTracer.retrace(player, ClipContext.Fluid.NONE);
+            System.out.println("Raw hit result: " + rawHit);
+            System.out.println("Raw hit class: " + (rawHit != null ? rawHit.getClass().getSimpleName() : "null"));
+            
             if (rawHit instanceof VoxelShapeBlockHitResult advHit) {
-                ItemStack heldStack = player.getItemInHand(handIn);
+                System.out.println("VoxelShapeBlockHitResult - subHit: " + advHit.subHit + " direction: " + advHit.getDirection());
+                
                 if (Utils.isWrench(heldStack)) {
+                    System.out.println(">> Is wrench - handling wrench interaction");
                     if (Utils.isClientWorld(worldIn)) {
                         return InteractionResult.SUCCESS;
                     }
@@ -138,6 +158,7 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
                     }
                     return InteractionResult.CONSUME;
                 } else if (heldStack.getItem() instanceof RedprintItem) {
+                    System.out.println(">> Is redprint - handling redprint interaction");
                     if (Utils.isClientWorld(worldIn)) {
                         return InteractionResult.SUCCESS;
                     }
@@ -147,6 +168,7 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
                         }
                     }
                 } else if (heldStack.isEmpty()) {
+                    System.out.println(">> Empty hand - handling GUI interaction");
                     if (Utils.isClientWorld(worldIn)) {
                         return InteractionResult.SUCCESS;
                     }
@@ -161,11 +183,23 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
                     }
                     return InteractionResult.CONSUME;
                 } else if (heldStack.getItem() instanceof AttachmentItem attachmentItem) {
+                    System.out.println(">>> DETECTED ATTACHMENT ITEM! <<<");
+                    System.out.println("Attachment type: " + attachmentItem.getAttachmentType(heldStack));
+                    System.out.println("subHit: " + advHit.subHit);
+                    System.out.println("advHit direction: " + advHit.getDirection());
+                    
                     if (Utils.isClientWorld(worldIn)) {
+                        System.out.println("Client world - returning SUCCESS");
                         return InteractionResult.SUCCESS;
                     }
+                    
+                    System.out.println("Server world - attempting attachment install");
+                    
                     if (advHit.subHit == 0) {
-                        if (duct.attemptAttachmentInstall(advHit.getDirection(), player, attachmentItem.getAttachmentType(heldStack))) {
+                        System.out.println("Clicking center of duct (subHit=0)");
+                        boolean success = duct.attemptAttachmentInstall(advHit.getDirection(), player, attachmentItem.getAttachmentType(heldStack));
+                        System.out.println(">>> Attachment install result: " + success + " <<<");
+                        if (success) {
                             if (!player.getAbilities().instabuild) {
                                 player.setItemInHand(handIn, consumeItem(heldStack, 1));
                             }
@@ -174,18 +208,118 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
                         }
                         return InteractionResult.SUCCESS;
                     } else if (advHit.subHit >= 7) {
-                        if (duct.attemptAttachmentInstall(DIRECTIONS[advHit.subHit - 7], player, attachmentItem.getAttachmentType(heldStack))) {
+                        System.out.println("Clicking external connection (subHit>=7)");
+                        Direction targetDir = DIRECTIONS[advHit.subHit - 7];
+                        System.out.println("Target direction: " + targetDir);
+                        boolean success = duct.attemptAttachmentInstall(targetDir, player, attachmentItem.getAttachmentType(heldStack));
+                        System.out.println(">>> Attachment install result: " + success + " <<<");
+                        if (success) {
                             if (!player.getAbilities().instabuild) {
                                 player.setItemInHand(handIn, consumeItem(heldStack, 1));
                             }
                         } else {
-                            duct.openAttachmentGui(DIRECTIONS[advHit.subHit - 7], player);
+                            duct.openAttachmentGui(targetDir, player);
                         }
                         return InteractionResult.SUCCESS;
+                    } else {
+                        System.out.println("SubHit " + advHit.subHit + " not handled for attachments (need 0 or >=7)");
+                    }
+                } else {
+                    System.out.println("Held item not recognized: " + heldStack.getItem().getClass());
+                }
+            } else if (rawHit instanceof BlockHitResult basicHit) {
+                System.out.println("Basic BlockHitResult - direction: " + basicHit.getDirection());
+                
+                // Server-side fallback for attachments when detailed raytrace isn't available
+                if (heldStack.getItem() instanceof AttachmentItem attachmentItem) {
+                    System.out.println(">>> SERVER: DETECTED ATTACHMENT ITEM! <<<");
+                    System.out.println("Attachment type: " + attachmentItem.getAttachmentType(heldStack));
+                    System.out.println("Basic hit direction: " + basicHit.getDirection());
+                    
+                    if (!Utils.isClientWorld(worldIn)) {
+                        System.out.println("Server world - attempting attachment install using basic direction");
+                        
+                        // For server-side, we need to determine which connector the player is trying to click
+                        // The hit direction tells us which face of the block was hit
+                        Direction hitFace = basicHit.getDirection();
+                        System.out.println("Hit face: " + hitFace);
+                        
+                        // Update model data to get current connections
+                        duct.calcDuctModelDataServer();
+                        DuctModelData modelData = duct.getDuctModelData();
+                        
+                        System.out.println("Checking all connections:");
+                        for (Direction dir : DIRECTIONS) {
+                            System.out.println("  " + dir + ": external=" + modelData.hasExternalConnection(dir) + 
+                                             ", internal=" + modelData.hasInternalConnection(dir));
+                        }
+                        
+                        // First, check if there's an external connection on the clicked face
+                        if (modelData.hasExternalConnection(hitFace) && !modelData.hasInternalConnection(hitFace)) {
+                            System.out.println("Found external connection (to block) on clicked face: " + hitFace);
+                            boolean success = duct.attemptAttachmentInstall(hitFace, player, attachmentItem.getAttachmentType(heldStack));
+                            System.out.println(">>> Attachment install result: " + success + " <<<");
+                            if (success) {
+                                if (!player.getAbilities().instabuild) {
+                                    player.setItemInHand(handIn, consumeItem(heldStack, 1));
+                                }
+                            } else {
+                                duct.openAttachmentGui(hitFace, player);
+                            }
+                            return InteractionResult.SUCCESS;
+                        }
+                        
+                        // If not on clicked face, find any external connection to a storage block
+                        System.out.println("No external connection on clicked face, checking other directions...");
+                        for (Direction dir : DIRECTIONS) {
+                            // External connection without internal connection = connection to storage block
+                            if (modelData.hasExternalConnection(dir) && !modelData.hasInternalConnection(dir)) {
+                                System.out.println("Found external connection to block at direction: " + dir);
+                                boolean success = duct.attemptAttachmentInstall(dir, player, attachmentItem.getAttachmentType(heldStack));
+                                System.out.println(">>> Attachment install result: " + success + " <<<");
+                                if (success) {
+                                    if (!player.getAbilities().instabuild) {
+                                        player.setItemInHand(handIn, consumeItem(heldStack, 1));
+                                    }
+                                } else {
+                                    duct.openAttachmentGui(dir, player);
+                                }
+                                return InteractionResult.SUCCESS;
+                            }
+                        }
+                        
+                        // If no storage block connections found, try any external connection
+                        System.out.println("No external connections to storage blocks found, trying any external connection...");
+                        for (Direction dir : DIRECTIONS) {
+                            if (modelData.hasExternalConnection(dir)) {
+                                System.out.println("Found external connection at direction: " + dir);
+                                boolean success = duct.attemptAttachmentInstall(dir, player, attachmentItem.getAttachmentType(heldStack));
+                                System.out.println(">>> Attachment install result: " + success + " <<<");
+                                if (success) {
+                                    if (!player.getAbilities().instabuild) {
+                                        player.setItemInHand(handIn, consumeItem(heldStack, 1));
+                                    }
+                                } else {
+                                    duct.openAttachmentGui(dir, player);
+                                }
+                                return InteractionResult.SUCCESS;
+                            }
+                        }
+                        
+                        System.out.println("No external connections found at all!");
                     }
                 }
+            } else {
+                System.out.println("Raw hit is unknown type: " + (rawHit != null ? rawHit.getClass().getSimpleName() : "null"));
+            }
+        } else {
+            System.out.println("Block entity is not DuctBlockEntity or is null");
+            if (worldIn.getBlockEntity(pos) != null) {
+                System.out.println("Block entity class: " + worldIn.getBlockEntity(pos).getClass());
             }
         }
+        
+        System.out.println("=== Returning PASS ===");
         return InteractionResult.PASS;
     }
 

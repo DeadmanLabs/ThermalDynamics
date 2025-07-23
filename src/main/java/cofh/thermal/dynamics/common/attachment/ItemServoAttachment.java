@@ -49,6 +49,10 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     protected final Direction side;
 
     public int amountTransfer = TRANSFER;
+    
+    // Extraction timing - extract every 5 seconds (100 ticks)
+    private int extractionCooldown = 0;
+    private static final int EXTRACTION_INTERVAL = 100; // 5 seconds at 20 TPS
 
     protected BaseItemFilter filter = new BaseItemFilter(15);
     protected RedstoneControlLogic rsControl = new RedstoneControlLogic(this);
@@ -95,6 +99,7 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
             return this;
         }
         amountTransfer = nbt.getInt(TAG_AMOUNT);
+        extractionCooldown = nbt.getInt("ExtractionCooldown");
 
         filter.read(nbt);
         rsControl.read(nbt);
@@ -111,6 +116,7 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     public CompoundTag write(CompoundTag nbt) {
         nbt.putString(TAG_TYPE, SERVO);
         nbt.putInt(TAG_AMOUNT, amountTransfer);
+        nbt.putInt("ExtractionCooldown", extractionCooldown);
 
         filter.write(nbt);
         rsControl.write(nbt);
@@ -127,55 +133,116 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
             return;
         }
         
+        // Decrement extraction cooldown
+        if (extractionCooldown > 0) {
+            extractionCooldown--;
+            return;
+        }
+        
+        System.out.println("ItemServo at " + pos() + " side " + side + ": Ready to extract (cooldown finished)");
+        
         // Extract items from connected inventory and route through grid
         extractAndRouteItems();
+        
+        // Set cooldown for next extraction
+        extractionCooldown = EXTRACTION_INTERVAL;
+        System.out.println("ItemServo: Extraction complete, cooldown set to " + EXTRACTION_INTERVAL + " ticks (5 seconds)");
     }
     
     private void extractAndRouteItems() {
+        System.out.println("ItemServo: extractAndRouteItems() called");
         // Get connected external inventory
         LazyOptional<IItemHandler> extCap = getExternalCapability();
-        if (!extCap.isPresent()) return;
+        if (!extCap.isPresent()) {
+            System.out.println("ItemServo: No external capability found");
+            return;
+        }
         
         IItemHandler externalHandler = extCap.orElse(null);
-        if (externalHandler == null) return;
+        if (externalHandler == null) {
+            System.out.println("ItemServo: External handler is null");
+            return;
+        }
+        
+        System.out.println("ItemServo: Found external handler: " + externalHandler.getClass().getSimpleName() + " with " + externalHandler.getSlots() + " slots");
         
         // Get grid for routing
-        if (!(duct.getGrid() instanceof cofh.thermal.dynamics.common.grid.item.ItemGrid itemGrid)) return;
+        if (!(duct.getGrid() instanceof cofh.thermal.dynamics.common.grid.item.ItemGrid itemGrid)) {
+            System.out.println("ItemServo: Grid is not ItemGrid: " + (duct.getGrid() != null ? duct.getGrid().getClass() : "null"));
+            return;
+        }
         
-        amountTransfer += TRANSFER;
-        amountTransfer = Math.min(amountTransfer, MAX_TRANSFER);
+        System.out.println("ItemServo: Found ItemGrid with " + itemGrid.getNodes().size() + " nodes");
+        
+        // Extract just 1 item per operation for slower, more controlled transfer
+        amountTransfer = 1;
+        
+        System.out.println("ItemServo: Extracting " + amountTransfer + " item(s) this cycle");
         
         // Try to extract items from external inventory
         for (int slot = 0; slot < externalHandler.getSlots() && amountTransfer > 0; slot++) {
+            ItemStack slotStack = externalHandler.getStackInSlot(slot);
+            System.out.println("ItemServo: Checking slot " + slot + ": " + (slotStack.isEmpty() ? "empty" : slotStack.getCount() + "x " + slotStack.getItem()));
+            
             ItemStack extractable = externalHandler.extractItem(slot, Math.min(amountTransfer, 64), true);
-            if (extractable.isEmpty() || !filter.valid(extractable)) continue;
+            if (extractable.isEmpty()) {
+                System.out.println("ItemServo: Cannot extract from slot " + slot + " (empty or blocked)");
+                continue;
+            }
+            
+            if (!filter.valid(extractable)) {
+                System.out.println("ItemServo: Item " + extractable.getItem() + " failed filter check");
+                continue;
+            }
+            
+            System.out.println("ItemServo: Can extract " + extractable.getCount() + "x " + extractable.getItem() + " from slot " + slot);
             
             // Find best destination for this item
             cofh.thermal.dynamics.common.grid.item.ItemGridNode.PathInfo pathInfo = findBestDestination(itemGrid, extractable);
-            if (pathInfo == null) continue; // No valid destination
+            if (pathInfo == null) {
+                System.out.println("ItemServo: No valid destination found for " + extractable.getItem());
+                continue; // No valid destination
+            }
+            
+            System.out.println("ItemServo: Found destination path with " + pathInfo.path.size() + " nodes, side: " + pathInfo.side);
             
             // Check if destination has capacity (including items in transit)
             BlockPos destPos = pathInfo.path.get(pathInfo.path.size() - 1);
             int availableCapacity = itemGrid.getAvailableCapacity(destPos, pathInfo.side, extractable);
-            if (availableCapacity <= 0) continue; // No capacity available
+            if (availableCapacity <= 0) {
+                System.out.println("ItemServo: No capacity available at destination " + destPos);
+                continue; // No capacity available
+            }
+            
+            System.out.println("ItemServo: Available capacity at destination: " + availableCapacity);
             
             // Extract only what can fit
             int toExtract = Math.min(extractable.getCount(), Math.min(amountTransfer, availableCapacity));
+            System.out.println("ItemServo: Attempting to extract " + toExtract + " items");
+            
             ItemStack extracted = externalHandler.extractItem(slot, toExtract, false);
-            if (extracted.isEmpty()) continue;
+            if (extracted.isEmpty()) {
+                System.out.println("ItemServo: Failed to extract items (returned empty)");
+                continue;
+            }
+            
+            System.out.println("ItemServo: Successfully extracted " + extracted.getCount() + "x " + extracted.getItem());
             
             // Route item through grid
+            System.out.println("ItemServo: Routing item through grid from " + pos() + " to " + destPos);
             itemGrid.insertItem(extracted, pos(), side, destPos, pathInfo.side, pathInfo.path);
             amountTransfer -= extracted.getCount();
+            
+            System.out.println("ItemServo: Remaining amountTransfer: " + amountTransfer);
         }
     }
     
     private LazyOptional<IItemHandler> getExternalCapability() {
-        if (externalCap.isPresent()) return externalCap;
-        
-        // Find connected tile
+        // Always get the raw capability directly from the tile, don't use cached wrapped version
         BlockEntity tile = world().getBlockEntity(pos().relative(side));
-        if (tile == null) return LazyOptional.empty();
+        if (tile == null) {
+            return LazyOptional.empty();
+        }
         
         return tile.getCapability(ForgeCapabilities.ITEM_HANDLER, side.getOpposite());
     }

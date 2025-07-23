@@ -42,18 +42,12 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
     }
     
     private void cacheConnections() {
-        System.out.println("=== ItemGridNode.cacheConnections() called ===");
-        System.out.println("Node pos: " + pos);
         connections.clear();
         for (Direction dir : Direction.values()) {
-            BlockPos targetPos = pos.relative(dir);
-            boolean canConnect = grid.canConnectOnSide(targetPos, dir.getOpposite());
-            System.out.println("  " + dir + " -> " + targetPos + ": canConnect=" + canConnect);
-            if (canConnect) {
+            if (grid.canConnectOnSide(pos.relative(dir), dir.getOpposite())) {
                 connections.add(dir);
             }
         }
-        System.out.println("Final connections: " + connections);
         connectionsCached = true;
     }
 
@@ -76,9 +70,11 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
     public void distributionTick() {
         if (!isLoaded()) return;
         
+        // Tick attachments first
+        attachmentTick();
+        
         // Cache connections if needed
         if (!connectionsCached) {
-            System.out.println("ItemGridNode distributionTick: connections not cached, calling cacheConnections");
             cacheConnections();
         }
         
@@ -108,6 +104,8 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
     private void updateDestinationCache() {
         destinationCache.clear();
         
+        System.out.println("ItemGridNode: Updating destination cache for node at " + pos);
+        
         // Use BFS to find all reachable destinations
         Set<BlockPos> visited = new HashSet<>();
         Queue<PathNode> queue = new LinkedList<>();
@@ -117,20 +115,27 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
         while (!queue.isEmpty()) {
             PathNode current = queue.poll();
             
-            // Check if current position has item handlers
-            BlockEntity tile = grid.getLevel().getBlockEntity(current.pos);
-            if (tile != null) {
-                for (Direction dir : Direction.values()) {
-                    if (tile.getCapability(ForgeCapabilities.ITEM_HANDLER, dir).isPresent()) {
-                        // Found a destination
-                        if (!current.pos.equals(pos)) {
-                            destinationCache.put(current.pos, new PathInfo(current.path, dir));
-                        }
-                    }
+            // Check for external connections from current position
+            for (Direction dir : Direction.values()) {
+                BlockPos neighborPos = current.pos.relative(dir);
+                BlockEntity tile = grid.getLevel().getBlockEntity(neighborPos);
+                
+                // Skip if this is another duct (internal connection)
+                if (grid.getNodes().containsKey(neighborPos)) {
+                    continue;
+                }
+                
+                // Check if this tile has item handler capability
+                if (tile != null && tile.getCapability(ForgeCapabilities.ITEM_HANDLER, dir.getOpposite()).isPresent()) {
+                    // Found an external destination
+                    List<BlockPos> pathToDestination = new ArrayList<>(current.path);
+                    pathToDestination.add(neighborPos);
+                    destinationCache.put(neighborPos, new PathInfo(pathToDestination, dir.getOpposite()));
+                    System.out.println("ItemGridNode: Found destination " + neighborPos + " (" + tile.getClass().getSimpleName() + ") via " + current.pos + " on side " + dir.getOpposite());
                 }
             }
             
-            // Explore neighbors
+            // Explore grid neighbors
             ItemGridNode currentNode = grid.getNodes().get(current.pos);
             if (currentNode != null) {
                 for (ItemGridNode neighbor : grid.nodeGraph.adjacentNodes(currentNode)) {
@@ -143,6 +148,8 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
                 }
             }
         }
+        
+        System.out.println("ItemGridNode: Destination cache updated, found " + destinationCache.size() + " destinations");
     }
 
     public boolean canExtractItem(Direction from) {
@@ -181,21 +188,46 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
     }
 
     public PathInfo findBestDestination(ItemStack stack) {
+        System.out.println("ItemGridNode: findBestDestination for " + stack.getItem() + ", cache size: " + destinationCache.size());
+        
         // For now, return first available destination
         // TODO: Implement smart routing based on filters, priorities, etc.
         for (Map.Entry<BlockPos, PathInfo> entry : destinationCache.entrySet()) {
-            BlockEntity tile = grid.getLevel().getBlockEntity(entry.getKey());
-            if (tile != null) {
-                LazyOptional<IItemHandler> cap = tile.getCapability(ForgeCapabilities.ITEM_HANDLER, entry.getValue().side);
-                if (cap.isPresent()) {
-                    IItemHandler handler = cap.orElse(null);
-                    if (handler != null && canInsertItem(handler, stack)) {
-                        return entry.getValue();
-                    }
-                }
+            BlockPos destPos = entry.getKey();
+            PathInfo pathInfo = entry.getValue();
+            System.out.println("ItemGridNode: Checking destination " + destPos + " on side " + pathInfo.side);
+            
+            BlockEntity tile = grid.getLevel().getBlockEntity(destPos);
+            if (tile == null) {
+                System.out.println("ItemGridNode: No tile entity at " + destPos);
+                continue;
+            }
+            
+            System.out.println("ItemGridNode: Found tile: " + tile.getClass().getSimpleName());
+            
+            LazyOptional<IItemHandler> cap = tile.getCapability(ForgeCapabilities.ITEM_HANDLER, pathInfo.side);
+            if (!cap.isPresent()) {
+                System.out.println("ItemGridNode: Tile has no item handler capability on side " + pathInfo.side);
+                continue;
+            }
+            
+            IItemHandler handler = cap.orElse(null);
+            if (handler == null) {
+                System.out.println("ItemGridNode: Item handler is null");
+                continue;
+            }
+            
+            System.out.println("ItemGridNode: Found item handler with " + handler.getSlots() + " slots");
+            
+            if (canInsertItem(handler, stack)) {
+                System.out.println("ItemGridNode: Found valid destination at " + destPos);
+                return pathInfo;
+            } else {
+                System.out.println("ItemGridNode: Cannot insert item into destination");
             }
         }
         
+        System.out.println("ItemGridNode: No valid destination found");
         return null;
     }
 

@@ -65,9 +65,16 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     }
 
     private void processItemsInTransit() {
+        if (!itemsInTransit.isEmpty()) {
+            System.out.println("ItemGrid: Processing " + itemsInTransit.size() + " items in transit");
+        }
+        
         Iterator<ItemInTransit> iterator = itemsInTransit.iterator();
         while (iterator.hasNext()) {
             ItemInTransit item = iterator.next();
+            
+            System.out.println("ItemGrid: Processing " + item.stack.getCount() + "x " + item.stack.getItem() + 
+                              " - distance: " + item.distanceTraveled + ", pathIndex: " + item.currentPathIndex + "/" + item.path.size());
             
             // Update item position
             item.distanceTraveled += ITEM_SPEED;
@@ -77,14 +84,19 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
                 item.distanceTraveled -= 1.0f;
                 item.currentPathIndex++;
                 
+                System.out.println("ItemGrid: Item advanced to pathIndex " + item.currentPathIndex);
+                
                 // Check if reached destination
                 if (item.currentPathIndex >= item.path.size() - 1) {
+                    System.out.println("ItemGrid: Item reached destination, attempting delivery");
                     // Try to insert into destination
                     if (tryInsertItem(item)) {
+                        System.out.println("ItemGrid: Item delivered successfully");
                         // Successfully inserted - remove from transit tracking
                         removeItemFromTransitTracking(item);
                         iterator.remove();
                     } else {
+                        System.out.println("ItemGrid: Item delivery failed, returning to sender");
                         // Backup occurred - reverse path and add to returning queue
                         item.reverse();
                         removeItemFromTransitTracking(item);
@@ -179,10 +191,19 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     }
 
     public void insertItem(ItemStack stack, BlockPos origin, Direction originSide, BlockPos destination, Direction destinationSide, List<BlockPos> path) {
-        if (stack.isEmpty() || path.isEmpty()) return;
+        System.out.println("ItemGrid: insertItem called - " + stack.getCount() + "x " + stack.getItem() + " from " + origin + " to " + destination);
+        
+        if (stack.isEmpty() || path.isEmpty()) {
+            System.out.println("ItemGrid: Rejecting item - stack empty: " + stack.isEmpty() + ", path empty: " + path.isEmpty());
+            return;
+        }
+        
+        System.out.println("ItemGrid: Path length: " + path.size() + ", current items in transit: " + itemsInTransit.size());
         
         ItemInTransit item = new ItemInTransit(stack.copy(), origin, originSide, destination, destinationSide, path);
         itemsInTransit.add(item);
+        
+        System.out.println("ItemGrid: Added item to transit queue, new size: " + itemsInTransit.size());
         
         // Track this item as in transit to destination
         addItemToTransitTracking(item);

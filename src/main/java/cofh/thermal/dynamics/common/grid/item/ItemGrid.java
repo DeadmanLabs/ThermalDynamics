@@ -32,8 +32,11 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
 
     private static final Logger LOGGER = LogManager.getLogger();
     
-    // Speed in blocks per tick (0.5 = 1 block every 2 ticks)
-    private static final float ITEM_SPEED = 0.5f;
+    // Track active grids for client-side rendering
+    private static final Map<Level, Set<ItemGrid>> activeGrids = new ConcurrentHashMap<>();
+    
+    // Speed in blocks per tick (0.05 = 1 block per second at 20 TPS for better visibility)
+    private static final float ITEM_SPEED = 0.05f;
     
     // Queue for items in transit - using concurrent queue for thread safety
     private final Queue<ItemInTransit> itemsInTransit = new ConcurrentLinkedQueue<>();
@@ -46,6 +49,33 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
 
     public ItemGrid(UUID id, Level world) {
         super(ITEM_GRID.get(), id, world);
+        
+        // Register this grid for client-side rendering (both server and client)
+        activeGrids.computeIfAbsent(world, k -> ConcurrentHashMap.newKeySet()).add(this);
+        System.out.println("ItemFlow: Registered ItemGrid on " + (world.isClientSide ? "client" : "server"));
+    }
+    
+    /**
+     * Get all active ItemGrids in a level for client-side rendering
+     */
+    public static Collection<ItemGrid> getActiveGrids(Level level) {
+        Set<ItemGrid> grids = activeGrids.get(level);
+        return grids != null ? new ArrayList<>(grids) : Collections.emptyList();
+    }
+    
+    /**
+     * Clean up grid tracking when grid is destroyed
+     */
+    public void cleanup() {
+        if (world != null) {
+            Set<ItemGrid> grids = activeGrids.get(world);
+            if (grids != null) {
+                grids.remove(this);
+                if (grids.isEmpty()) {
+                    activeGrids.remove(world);
+                }
+            }
+        }
     }
     
     @Override
@@ -62,6 +92,35 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         
         // Process returning items
         processReturningItems();
+        
+        // Update render data for all duct nodes
+        updateRenderData();
+    }
+    
+    private void updateRenderData() {
+        if (world.isClientSide) return;
+        
+        // Only update render data if we have items in transit
+        if (itemsInTransit.isEmpty()) return;
+        
+        // Only log periodically to avoid spam
+        if (world.getGameTime() % 20 == 0) {
+            System.out.println("ItemGrid: Updating render data for " + getNodes().size() + " nodes with " + itemsInTransit.size() + " items in transit");
+        }
+        
+        // Update all windowed duct entities with current item transit data
+        for (ItemGridNode node : getNodes().values()) {
+            try {
+                if (node.getDuct() instanceof cofh.thermal.dynamics.common.block.entity.duct.ItemDuctBlockEntity ductEntity) {
+                    if (ductEntity.isWindowed() && ductEntity.hasLevel()) {
+                        ductEntity.update(); // Use the IGridHostUpdateable.update() method to trigger packet send
+                    }
+                }
+            } catch (Exception e) {
+                // Don't let render updates break the grid
+                System.out.println("ItemGrid: Error updating render data for node at " + node.getPos() + ": " + e.getMessage());
+            }
+        }
     }
 
     private void processItemsInTransit() {
@@ -73,36 +132,30 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         while (iterator.hasNext()) {
             ItemInTransit item = iterator.next();
             
-            System.out.println("ItemGrid: Processing " + item.stack.getCount() + "x " + item.stack.getItem() + 
-                              " - distance: " + item.distanceTraveled + ", pathIndex: " + item.currentPathIndex + "/" + item.path.size());
-            
-            // Update item position
+            // Update item position based on actual speed
             item.distanceTraveled += ITEM_SPEED;
+            double totalDistance = item.getTotalDistance();
+            double progress = (item.distanceTraveled / totalDistance) * 100;
             
-            // Check if item reached next node
-            if (item.distanceTraveled >= 1.0f) {
-                item.distanceTraveled -= 1.0f;
-                item.currentPathIndex++;
-                
-                System.out.println("ItemGrid: Item advanced to pathIndex " + item.currentPathIndex);
-                
-                // Check if reached destination
-                if (item.currentPathIndex >= item.path.size() - 1) {
-                    System.out.println("ItemGrid: Item reached destination, attempting delivery");
-                    // Try to insert into destination
-                    if (tryInsertItem(item)) {
-                        System.out.println("ItemGrid: Item delivered successfully");
-                        // Successfully inserted - remove from transit tracking
-                        removeItemFromTransitTracking(item);
-                        iterator.remove();
-                    } else {
-                        System.out.println("ItemGrid: Item delivery failed, returning to sender");
-                        // Backup occurred - reverse path and add to returning queue
-                        item.reverse();
-                        removeItemFromTransitTracking(item);
-                        returningItems.add(item);
-                        iterator.remove();
-                    }
+            System.out.println("ItemGrid: Item " + item.stack.getItem() + " progress: " + String.format("%.1f", progress) + "% (" + String.format("%.2f", item.distanceTraveled) + "/" + String.format("%.2f", totalDistance) + ")");
+            
+            // Check if item reached destination
+            if (item.distanceTraveled >= totalDistance) {
+                // Try to insert into destination
+                if (tryInsertItem(item)) {
+                    System.out.println("ItemFlow: Delivered " + item.stack.getCount() + "x " + item.stack.getItem() + " to " + item.destination);
+                    // Successfully inserted - remove from transit tracking
+                    removeItemFromTransitTracking(item);
+                    iterator.remove();
+                } else {
+                    System.out.println("ItemFlow: Delivery failed, returning " + item.stack.getCount() + "x " + item.stack.getItem() + " to sender");
+                    // Backup occurred - reverse path and add to returning queue
+                    item.reverse();
+                    // Reset distance traveled for return journey
+                    item.distanceTraveled = 0;
+                    removeItemFromTransitTracking(item);
+                    returningItems.add(item);
+                    iterator.remove();
                 }
             }
         }
@@ -113,20 +166,16 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         while (iterator.hasNext()) {
             ItemInTransit item = iterator.next();
             
+            double totalDistance = item.getTotalDistance();
+            
             // Update item position
             item.distanceTraveled += ITEM_SPEED;
             
-            // Check if item reached next node
-            if (item.distanceTraveled >= 1.0f) {
-                item.distanceTraveled -= 1.0f;
-                item.currentPathIndex++;
-                
-                // Check if reached origin
-                if (item.currentPathIndex >= item.path.size() - 1) {
-                    // Store in original servo's overflow (infinite storage)
-                    handleReturnedItem(item);
-                    iterator.remove();
-                }
+            // Check if item reached origin
+            if (item.distanceTraveled >= totalDistance) {
+                // Store in original servo's overflow (infinite storage)
+                handleReturnedItem(item);
+                iterator.remove();
             }
         }
     }
@@ -191,22 +240,24 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     }
 
     public void insertItem(ItemStack stack, BlockPos origin, Direction originSide, BlockPos destination, Direction destinationSide, List<BlockPos> path) {
-        System.out.println("ItemGrid: insertItem called - " + stack.getCount() + "x " + stack.getItem() + " from " + origin + " to " + destination);
+        System.out.println("ItemGrid: insertItem called - " + stack.getCount() + "x " + stack.getItem() + " from " + origin + " to " + destination + " with path length " + path.size());
         
-        if (stack.isEmpty() || path.isEmpty()) {
-            System.out.println("ItemGrid: Rejecting item - stack empty: " + stack.isEmpty() + ", path empty: " + path.isEmpty());
+        if (stack.isEmpty()) {
+            System.out.println("ItemGrid: Stack is empty, aborting insert");
             return;
         }
-        
-        System.out.println("ItemGrid: Path length: " + path.size() + ", current items in transit: " + itemsInTransit.size());
         
         ItemInTransit item = new ItemInTransit(stack.copy(), origin, originSide, destination, destinationSide, path);
         itemsInTransit.add(item);
         
-        System.out.println("ItemGrid: Added item to transit queue, new size: " + itemsInTransit.size());
+        double totalDistance = item.getTotalDistance();
+        int estimatedTicks = (int) Math.ceil(totalDistance / ITEM_SPEED);
+        System.out.println("ItemFlow: Started transit - " + stack.getCount() + "x " + stack.getItem() + " will travel " + String.format("%.1f", totalDistance) + " blocks over ~" + estimatedTicks + " ticks");
         
         // Track this item as in transit to destination
         addItemToTransitTracking(item);
+        
+        System.out.println("ItemGrid: Item successfully added to transit queue. Current queue size: " + itemsInTransit.size());
     }
     
     private void addItemToTransitTracking(ItemInTransit item) {
@@ -323,6 +374,9 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         
         // Clear transit tracking
         itemsInTransitToDestination.clear();
+        
+        // Cleanup grid tracking
+        cleanup();
     }
 
     @Override
@@ -404,6 +458,36 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             this.currentPathIndex = 0;
             this.distanceTraveled = 0;
             this.returning = false;
+        }
+        
+        /**
+         * Calculate the total physical distance the item needs to travel
+         */
+        public double getTotalDistance() {
+            if (path.size() <= 1) {
+                // Direct connection - distance from origin to destination
+                return Math.sqrt(origin.distSqr(destination));
+            }
+            
+            double totalDistance = 0;
+            BlockPos currentPos = origin;
+            
+            // Add distance from origin to first path node
+            if (!path.isEmpty()) {
+                totalDistance += Math.sqrt(currentPos.distSqr(path.get(0)));
+                currentPos = path.get(0);
+            }
+            
+            // Add distance between path nodes
+            for (int i = 1; i < path.size(); i++) {
+                totalDistance += Math.sqrt(currentPos.distSqr(path.get(i)));
+                currentPos = path.get(i);
+            }
+            
+            // Add distance from last path node to destination
+            totalDistance += Math.sqrt(currentPos.distSqr(destination));
+            
+            return totalDistance;
         }
 
         public void reverse() {

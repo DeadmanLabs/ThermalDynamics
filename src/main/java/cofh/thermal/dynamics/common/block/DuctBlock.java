@@ -123,9 +123,9 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
 
         if (worldIn.getBlockEntity(pos) instanceof DuctBlockEntity<?, ?> duct) {
             duct.calcDuctModelDataServer();
+            ItemStack heldStack = player.getItemInHand(handIn);
             HitResult rawHit = RayTracer.retrace(player, ClipContext.Fluid.NONE);
             if (rawHit instanceof VoxelShapeBlockHitResult advHit) {
-                ItemStack heldStack = player.getItemInHand(handIn);
                 if (Utils.isWrench(heldStack)) {
                     if (Utils.isClientWorld(worldIn)) {
                         return InteractionResult.SUCCESS;
@@ -187,7 +187,6 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
                 }
             } else if (rawHit instanceof BlockHitResult basicHit) {
                 // Server-side fallback for attachments when detailed raytrace isn't available
-                ItemStack heldStack = player.getItemInHand(handIn);
                 if (heldStack.getItem() instanceof AttachmentItem attachmentItem) {
                     if (!Utils.isClientWorld(worldIn)) {
                         // Find any external connection to a storage block
@@ -259,10 +258,13 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
             return;
         }
         BlockEntity tile = worldIn.getBlockEntity(pos);
+        System.out.println("DuctBlock: onPlace at " + pos + " - tile=" + (tile != null ? tile.getClass().getSimpleName() : "null"));
         if (tile instanceof IDuct<?, ?> host && !host.hasGrid()) {
             IGridContainer gridContainer = IGridContainer.getCapability(worldIn);
+            System.out.println("DuctBlock: gridContainer=" + (gridContainer != null ? "found" : "null") + ", hasGrid=" + host.hasGrid());
             if (gridContainer != null) {
                 gridContainer.onDuctPlaced(host, null);
+                System.out.println("DuctBlock: Called onDuctPlaced for " + host.getClass().getSimpleName() + " at " + pos);
             }
         }
     }

@@ -61,8 +61,19 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
         if (duct == null) {
             return;
         }
+        
+        boolean hasAttachments = false;
         for (Direction dir : Direction.values()) {
-            duct.getAttachment(dir).tick();
+            var attachment = duct.getAttachment(dir);
+            if (attachment != null && !(attachment instanceof cofh.thermal.dynamics.common.attachment.EmptyAttachment)) {
+                hasAttachments = true;
+                System.out.println("ItemGridNode: Ticking attachment " + attachment.getClass().getSimpleName() + " at " + pos + " direction " + dir);
+                attachment.tick();
+            }
+        }
+        
+        if (hasAttachments && grid.getLevel().getGameTime() % 20 == 0) {
+            System.out.println("ItemGridNode: Ticked attachments at " + pos + " (tick " + grid.getLevel().getGameTime() + ")");
         }
     }
     
@@ -104,8 +115,6 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
     private void updateDestinationCache() {
         destinationCache.clear();
         
-        System.out.println("ItemGridNode: Updating destination cache for node at " + pos);
-        
         // Use BFS to find all reachable destinations
         Set<BlockPos> visited = new HashSet<>();
         Queue<PathNode> queue = new LinkedList<>();
@@ -127,11 +136,14 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
                 
                 // Check if this tile has item handler capability
                 if (tile != null && tile.getCapability(ForgeCapabilities.ITEM_HANDLER, dir.getOpposite()).isPresent()) {
-                    // Found an external destination
-                    List<BlockPos> pathToDestination = new ArrayList<>(current.path);
-                    pathToDestination.add(neighborPos);
-                    destinationCache.put(neighborPos, new PathInfo(pathToDestination, dir.getOpposite()));
-                    System.out.println("ItemGridNode: Found destination " + neighborPos + " (" + tile.getClass().getSimpleName() + ") via " + current.pos + " on side " + dir.getOpposite());
+                    // Found an external destination - path contains only duct positions, not the destination
+                    List<BlockPos> pathThroughDucts = new ArrayList<>(current.path);
+                    // Add the current duct position to the path if it's not the starting position
+                    if (!current.pos.equals(pos)) {
+                        pathThroughDucts.add(current.pos);
+                    }
+                    destinationCache.put(neighborPos, new PathInfo(pathThroughDucts, dir.getOpposite()));
+                    System.out.println("ItemFlow: Found destination " + neighborPos + " (" + tile.getClass().getSimpleName() + ") via duct path length " + pathThroughDucts.size() + " from " + pos + " through " + current.pos);
                 }
             }
             
@@ -149,7 +161,10 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
             }
         }
         
-        System.out.println("ItemGridNode: Destination cache updated, found " + destinationCache.size() + " destinations");
+        // Only log if we found destinations and it's not a frequent update
+        if (destinationCache.size() > 0 && grid.getLevel().getGameTime() % 100 == 0) {
+            System.out.println("ItemFlow: Node at " + pos + " found " + destinationCache.size() + " destinations");
+        }
     }
 
     public boolean canExtractItem(Direction from) {
@@ -187,47 +202,98 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
         return ItemStack.EMPTY;
     }
 
-    public PathInfo findBestDestination(ItemStack stack) {
-        System.out.println("ItemGridNode: findBestDestination for " + stack.getItem() + ", cache size: " + destinationCache.size());
+    public static class DestinationResult {
+        public final BlockPos destination;
+        public final PathInfo pathInfo;
         
-        // For now, return first available destination
+        public DestinationResult(BlockPos destination, PathInfo pathInfo) {
+            this.destination = destination;
+            this.pathInfo = pathInfo;
+        }
+    }
+
+    public DestinationResult findBestDestination(ItemStack stack) {
+        // For now, return first available destination that doesn't have a servo extracting from it
         // TODO: Implement smart routing based on filters, priorities, etc.
+        System.out.println("ItemFlow: Finding destination for " + stack.getItem() + " from node " + pos + " - checking " + destinationCache.size() + " cached destinations");
+        
         for (Map.Entry<BlockPos, PathInfo> entry : destinationCache.entrySet()) {
             BlockPos destPos = entry.getKey();
             PathInfo pathInfo = entry.getValue();
-            System.out.println("ItemGridNode: Checking destination " + destPos + " on side " + pathInfo.side);
+            
+            System.out.println("ItemFlow: Evaluating destination " + destPos + " with path length " + pathInfo.path.size());
             
             BlockEntity tile = grid.getLevel().getBlockEntity(destPos);
             if (tile == null) {
-                System.out.println("ItemGridNode: No tile entity at " + destPos);
+                System.out.println("ItemFlow: Destination " + destPos + " - no tile entity");
                 continue;
             }
             
-            System.out.println("ItemGridNode: Found tile: " + tile.getClass().getSimpleName());
-            
             LazyOptional<IItemHandler> cap = tile.getCapability(ForgeCapabilities.ITEM_HANDLER, pathInfo.side);
             if (!cap.isPresent()) {
-                System.out.println("ItemGridNode: Tile has no item handler capability on side " + pathInfo.side);
+                System.out.println("ItemFlow: Destination " + destPos + " - no item handler capability");
                 continue;
             }
             
             IItemHandler handler = cap.orElse(null);
             if (handler == null) {
-                System.out.println("ItemGridNode: Item handler is null");
+                System.out.println("ItemFlow: Destination " + destPos + " - null handler");
                 continue;
             }
             
-            System.out.println("ItemGridNode: Found item handler with " + handler.getSlots() + " slots");
+            if (!canInsertItem(handler, stack)) {
+                System.out.println("ItemFlow: Destination " + destPos + " - cannot insert item");
+                continue;
+            }
             
-            if (canInsertItem(handler, stack)) {
-                System.out.println("ItemGridNode: Found valid destination at " + destPos);
-                return pathInfo;
+            // Check if this destination has a servo that would extract from it
+            // This prevents items from being routed to chests that servos are already extracting from
+            boolean hasConflictingServo = false;
+            
+            // Determine the duct position that connects to this destination
+            BlockPos connectingDuctPos;
+            if (pathInfo.path.size() > 0) {
+                // Path through other ducts - use the last duct in the path
+                connectingDuctPos = pathInfo.path.get(pathInfo.path.size() - 1);
             } else {
-                System.out.println("ItemGridNode: Cannot insert item into destination");
+                // Direct connection - this node connects directly to destination
+                connectingDuctPos = pos;
+            }
+            
+            ItemGridNode connectingDuctNode = grid.getNodes().get(connectingDuctPos);
+            
+            try {
+                if (connectingDuctNode != null && connectingDuctNode.getDuct() != null) {
+                    // Get the direction from the connecting duct to the destination
+                    Direction dirToDestination = null;
+                    BlockPos relative = destPos.subtract(connectingDuctPos);
+                    for (Direction checkDir : Direction.values()) {
+                        if (checkDir.getNormal().equals(relative)) {
+                            dirToDestination = checkDir;
+                            break;
+                        }
+                    }
+                    
+                    if (dirToDestination != null) {
+                        var attachment = connectingDuctNode.getDuct().getAttachment(dirToDestination);
+                        if (attachment instanceof cofh.thermal.dynamics.common.attachment.ItemServoAttachment) {
+                            hasConflictingServo = true;
+                            System.out.println("ItemFlow: Skipping destination " + destPos + " - has conflicting servo on duct " + connectingDuctPos + " direction " + dirToDestination);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // If there's any error, allow the destination
+                System.out.println("ItemFlow: Error checking servo conflict for " + destPos + ": " + e.getMessage());
+                hasConflictingServo = false;
+            }
+            
+            if (!hasConflictingServo) {
+                System.out.println("ItemFlow: Routing " + stack.getItem() + " to " + destPos + " via path length " + pathInfo.path.size());
+                return new DestinationResult(destPos, pathInfo);
             }
         }
         
-        System.out.println("ItemGridNode: No valid destination found");
         return null;
     }
 

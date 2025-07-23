@@ -112,6 +112,7 @@ public class ItemTurboServoAttachment extends ItemServoAttachment {
         if (ourNode == null) return null;
         
         // Use the node's pathfinding to find destinations
-        return ourNode.findBestDestination(stack);
+        cofh.thermal.dynamics.common.grid.item.ItemGridNode.DestinationResult result = ourNode.findBestDestination(stack);
+        return result != null ? result.pathInfo : null;
     }
 }

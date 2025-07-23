@@ -130,110 +130,134 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     @Override
     public void tick() {
         if (!rsControl.getState()) {
+            System.out.println("ItemServo: Redstone control disabled at " + pos() + " side " + side());
             return;
         }
         
         // Decrement extraction cooldown
         if (extractionCooldown > 0) {
             extractionCooldown--;
+            if (extractionCooldown == 0) {
+                System.out.println("ItemServo: Cooldown finished, ready to extract at " + pos() + " side " + side());
+            }
             return;
         }
         
-        System.out.println("ItemServo at " + pos() + " side " + side + ": Ready to extract (cooldown finished)");
+        System.out.println("ItemServo: Attempting extraction at " + pos() + " side " + side());
         
         // Extract items from connected inventory and route through grid
         extractAndRouteItems();
         
         // Set cooldown for next extraction
         extractionCooldown = EXTRACTION_INTERVAL;
-        System.out.println("ItemServo: Extraction complete, cooldown set to " + EXTRACTION_INTERVAL + " ticks (5 seconds)");
+        System.out.println("ItemServo: Set cooldown to " + EXTRACTION_INTERVAL + " ticks");
     }
     
     private void extractAndRouteItems() {
-        System.out.println("ItemServo: extractAndRouteItems() called");
-        // Get connected external inventory
-        LazyOptional<IItemHandler> extCap = getExternalCapability();
-        if (!extCap.isPresent()) {
-            System.out.println("ItemServo: No external capability found");
-            return;
-        }
-        
-        IItemHandler externalHandler = extCap.orElse(null);
-        if (externalHandler == null) {
-            System.out.println("ItemServo: External handler is null");
-            return;
-        }
-        
-        System.out.println("ItemServo: Found external handler: " + externalHandler.getClass().getSimpleName() + " with " + externalHandler.getSlots() + " slots");
-        
-        // Get grid for routing
-        if (!(duct.getGrid() instanceof cofh.thermal.dynamics.common.grid.item.ItemGrid itemGrid)) {
-            System.out.println("ItemServo: Grid is not ItemGrid: " + (duct.getGrid() != null ? duct.getGrid().getClass() : "null"));
-            return;
-        }
-        
-        System.out.println("ItemServo: Found ItemGrid with " + itemGrid.getNodes().size() + " nodes");
-        
-        // Extract just 1 item per operation for slower, more controlled transfer
-        amountTransfer = 1;
-        
-        System.out.println("ItemServo: Extracting " + amountTransfer + " item(s) this cycle");
-        
-        // Try to extract items from external inventory
-        for (int slot = 0; slot < externalHandler.getSlots() && amountTransfer > 0; slot++) {
-            ItemStack slotStack = externalHandler.getStackInSlot(slot);
-            System.out.println("ItemServo: Checking slot " + slot + ": " + (slotStack.isEmpty() ? "empty" : slotStack.getCount() + "x " + slotStack.getItem()));
+        try {
+            System.out.println("ItemServo: extractAndRouteItems called at " + pos() + " side " + side());
             
-            ItemStack extractable = externalHandler.extractItem(slot, Math.min(amountTransfer, 64), true);
-            if (extractable.isEmpty()) {
-                System.out.println("ItemServo: Cannot extract from slot " + slot + " (empty or blocked)");
-                continue;
+            // Get connected external inventory
+            LazyOptional<IItemHandler> extCap = getExternalCapability();
+            if (!extCap.isPresent()) {
+                System.out.println("ItemServo: No external capability at " + pos() + " side " + side());
+                return;
             }
             
-            if (!filter.valid(extractable)) {
-                System.out.println("ItemServo: Item " + extractable.getItem() + " failed filter check");
-                continue;
+            IItemHandler externalHandler = extCap.orElse(null);
+            if (externalHandler == null) {
+                System.out.println("ItemServo: External handler is null at " + pos() + " side " + side());
+                return;
             }
             
-            System.out.println("ItemServo: Can extract " + extractable.getCount() + "x " + extractable.getItem() + " from slot " + slot);
-            
-            // Find best destination for this item
-            cofh.thermal.dynamics.common.grid.item.ItemGridNode.PathInfo pathInfo = findBestDestination(itemGrid, extractable);
-            if (pathInfo == null) {
-                System.out.println("ItemServo: No valid destination found for " + extractable.getItem());
-                continue; // No valid destination
+            // Get grid for routing
+            if (!(duct.getGrid() instanceof cofh.thermal.dynamics.common.grid.item.ItemGrid itemGrid)) {
+                System.out.println("ItemServo: Grid is not ItemGrid at " + pos() + " side " + side() + " - got " + (duct.getGrid() != null ? duct.getGrid().getClass().getSimpleName() : "null"));
+                return;
             }
             
-            System.out.println("ItemServo: Found destination path with " + pathInfo.path.size() + " nodes, side: " + pathInfo.side);
-            
-            // Check if destination has capacity (including items in transit)
-            BlockPos destPos = pathInfo.path.get(pathInfo.path.size() - 1);
-            int availableCapacity = itemGrid.getAvailableCapacity(destPos, pathInfo.side, extractable);
-            if (availableCapacity <= 0) {
-                System.out.println("ItemServo: No capacity available at destination " + destPos);
-                continue; // No capacity available
+            // Get our grid node
+            cofh.thermal.dynamics.common.grid.item.ItemGridNode ourNode = itemGrid.getNodes().get(pos());
+            if (ourNode == null) {
+                System.out.println("ItemServo: No grid node found at " + pos());
+                return;
             }
             
-            System.out.println("ItemServo: Available capacity at destination: " + availableCapacity);
+            System.out.println("ItemServo: Got ItemGrid and external handler, proceeding with extraction");
+            System.out.println("ItemServo: External handler has " + externalHandler.getSlots() + " slots");
             
-            // Extract only what can fit
-            int toExtract = Math.min(extractable.getCount(), Math.min(amountTransfer, availableCapacity));
-            System.out.println("ItemServo: Attempting to extract " + toExtract + " items");
+            // Extract just 1 item per operation for slower, more controlled transfer
+            amountTransfer = 1;
             
-            ItemStack extracted = externalHandler.extractItem(slot, toExtract, false);
-            if (extracted.isEmpty()) {
-                System.out.println("ItemServo: Failed to extract items (returned empty)");
-                continue;
+            // Try to extract items from external inventory
+            for (int slot = 0; slot < externalHandler.getSlots() && amountTransfer > 0; slot++) {
+                try {
+                    ItemStack slotStack = externalHandler.getStackInSlot(slot);
+                    if (slotStack.isEmpty()) {
+                        continue;
+                    }
+                    
+                    System.out.println("ItemServo: Checking slot " + slot + " with " + slotStack.getCount() + "x " + slotStack.getItem());
+                    
+                    // Test extraction first
+                    ItemStack extractable = externalHandler.extractItem(slot, Math.min(amountTransfer, 64), true);
+                    if (extractable.isEmpty()) {
+                        System.out.println("ItemServo: Cannot extract from slot " + slot);
+                        continue;
+                    }
+                    
+                    if (!filter.valid(extractable)) {
+                        System.out.println("ItemServo: Item " + extractable.getItem() + " failed filter check");
+                        continue;
+                    }
+                    
+                    // Find best destination for this item
+                    cofh.thermal.dynamics.common.grid.item.ItemGridNode.DestinationResult destination = ourNode.findBestDestination(extractable);
+                    if (destination == null) {
+                        System.out.println("ItemServo: No valid destination found for " + extractable.getItem());
+                        continue;
+                    }
+                    
+                    BlockPos destPos = destination.destination;
+                    cofh.thermal.dynamics.common.grid.item.ItemGridNode.PathInfo pathInfo = destination.pathInfo;
+                    
+                    System.out.println("ItemServo: Found destination " + destPos + " for " + extractable.getItem());
+                    
+                    // Check if destination has capacity (including items in transit)
+                    int availableCapacity = itemGrid.getAvailableCapacity(destPos, pathInfo.side, extractable);
+                    if (availableCapacity <= 0) {
+                        System.out.println("ItemServo: No capacity available at destination " + destPos);
+                        continue;
+                    }
+                    
+                    // Extract only what can fit
+                    int toExtract = Math.min(extractable.getCount(), Math.min(amountTransfer, availableCapacity));
+                    
+                    ItemStack extracted = externalHandler.extractItem(slot, toExtract, false);
+                    if (extracted.isEmpty()) {
+                        System.out.println("ItemServo: Actual extraction failed for slot " + slot);
+                        continue;
+                    }
+                    
+                    System.out.println("ItemServo: Successfully extracted " + extracted.getCount() + "x " + extracted.getItem() + " from " + pos() + " -> routing to " + destPos);
+                    
+                    // Route item through grid
+                    itemGrid.insertItem(extracted, pos(), side(), destPos, pathInfo.side, pathInfo.path);
+                    amountTransfer -= extracted.getCount();
+                    
+                    System.out.println("ItemServo: Inserted item into grid for transport");
+                    
+                } catch (Exception e) {
+                    System.out.println("ItemServo: Exception processing slot " + slot + ": " + e.getMessage());
+                    e.printStackTrace();
+                }
             }
             
-            System.out.println("ItemServo: Successfully extracted " + extracted.getCount() + "x " + extracted.getItem());
+            System.out.println("ItemServo: Extraction cycle completed");
             
-            // Route item through grid
-            System.out.println("ItemServo: Routing item through grid from " + pos() + " to " + destPos);
-            itemGrid.insertItem(extracted, pos(), side, destPos, pathInfo.side, pathInfo.path);
-            amountTransfer -= extracted.getCount();
-            
-            System.out.println("ItemServo: Remaining amountTransfer: " + amountTransfer);
+        } catch (Exception e) {
+            System.out.println("ItemServo: Exception during extraction: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     
@@ -247,14 +271,6 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
         return tile.getCapability(ForgeCapabilities.ITEM_HANDLER, side.getOpposite());
     }
     
-    private cofh.thermal.dynamics.common.grid.item.ItemGridNode.PathInfo findBestDestination(cofh.thermal.dynamics.common.grid.item.ItemGrid grid, ItemStack stack) {
-        // Get our grid node
-        cofh.thermal.dynamics.common.grid.item.ItemGridNode ourNode = grid.getNodes().get(pos());
-        if (ourNode == null) return null;
-        
-        // Use the node's pathfinding to find destinations
-        return ourNode.findBestDestination(stack);
-    }
 
 
     /**

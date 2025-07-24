@@ -130,33 +130,18 @@ public abstract class DuctBlockEntity<G extends Grid<G, N>, N extends GridNode<G
     }
 
     public boolean attemptAttachmentInstall(Direction side, Player player, String type) {
-        System.out.println("=== attemptAttachmentInstall called ===");
-        System.out.println("Type: " + type);
-        System.out.println("Side: " + side);
-        System.out.println("Current attachment on side: " + attachments[side.ordinal()]);
-        System.out.println("Is EmptyAttachment: " + (attachments[side.ordinal()] == EmptyAttachment.INSTANCE));
-        
         if (attachments[side.ordinal()] != EmptyAttachment.INSTANCE) {
-            System.out.println("Side already has attachment, returning false");
             return false;
         }
         
-        System.out.println("Calling AttachmentRegistry.getAttachment...");
         IAttachment attachment = AttachmentRegistry.getAttachment(type, new CompoundTag(), this, side);
-        System.out.println("AttachmentRegistry returned: " + attachment);
-        System.out.println("Attachment class: " + (attachment != null ? attachment.getClass().getSimpleName() : "null"));
-        System.out.println("Is null: " + (attachment == null));
-        System.out.println("Is EmptyAttachment: " + (attachment == EmptyAttachment.INSTANCE));
         
         if (attachment == null || attachment == EmptyAttachment.INSTANCE) {
-            System.out.println("Attachment is null or empty, returning false");
             return false;
         }
         
-        System.out.println("Installing attachment...");
         attachments[side.ordinal()] = attachment;
         connections[side.ordinal()] = FORCED;
-        System.out.println("Attachment installed successfully!");
 
         ItemStack offhand = player.getItemInHand(InteractionHand.OFF_HAND);
         if (offhand.hasTag() && offhand.getItem() instanceof RedprintItem) {
@@ -167,7 +152,6 @@ public abstract class DuctBlockEntity<G extends Grid<G, N>, N extends GridNode<G
 
         // TODO: Send FULL Update Packet
         TileStatePacket.sendToClient(this);
-        System.out.println("=== attemptAttachmentInstall returning true ===");
         return true;
     }
 

@@ -4,10 +4,14 @@ import cofh.thermal.dynamics.common.block.ItemDuctBlock;
 import cofh.thermal.dynamics.common.block.entity.duct.ItemDuctBlockEntity;
 import cofh.thermal.dynamics.common.grid.item.ItemGrid;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.block.model.ItemTransforms;
 import net.minecraft.client.renderer.entity.ItemRenderer;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
@@ -44,23 +48,37 @@ public class ItemTransportRenderer {
     }
 
     private static void renderItemsInTransit(RenderLevelStageEvent event) {
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
+        // Debug: Log all render calls to see if we're being called at all
+        Level level = Minecraft.getInstance().level;
+        if (level != null && level.getGameTime() % 60 == 0) {
+            System.out.println("CLIENT: renderItemsInTransit called at stage " + event.getStage() + " tick " + level.getGameTime());
+        }
+        
+        // Try multiple render stages to ensure visibility
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS && 
+            event.getStage() != RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS &&
+            event.getStage() != RenderLevelStageEvent.Stage.AFTER_CUTOUT_BLOCKS) {
             return;
         }
 
-        Level level = Minecraft.getInstance().level;
-        if (level == null) return;
+        if (level == null) {
+            System.out.println("CLIENT: Level is null, returning");
+            return;
+        }
         
-        // Always log to debug why renderer isn't working
-        System.out.println("ItemTransportRenderer: Render event called on " + (level.isClientSide ? "client" : "server") + " at tick " + level.getGameTime());
+        // Debug logging every few seconds instead of every frame
+        if (level.getGameTime() % 60 == 0) {
+            System.out.println("CLIENT: ItemTransportRenderer proceeding with rendering at stage " + event.getStage() + " tick " + level.getGameTime());
+        }
 
         PoseStack poseStack = event.getPoseStack();
         MultiBufferSource.BufferSource buffer = Minecraft.getInstance().renderBuffers().bufferSource();
         Vec3 cameraPos = event.getCamera().getPosition();
         float partialTick = event.getPartialTick();
 
+        // Don't translate by camera position - let Minecraft handle world-to-screen transformation
         poseStack.pushPose();
-        poseStack.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
+        System.out.println("CLIENT: Starting render pass, camera at " + cameraPos);
 
         // Get all ItemGrids in the level and render their items in transit
         renderItemsForAllGrids(level, poseStack, buffer, partialTick);
@@ -82,14 +100,14 @@ public class ItemTransportRenderer {
     }
     
     private static int renderFromBlockEntities(Level level, PoseStack poseStack, MultiBufferSource bufferSource, float partialTick) {
-        // Use the level's block entity tick list to find loaded ItemDuctBlockEntity instances
+        // Use the cached block entity approach with improved position calculation
         Vec3 cameraPos = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        int renderDistance = 16; // Smaller search area but check every block
+        int renderDistance = 32; // Reasonable render distance
         
         int itemCount = 0;
-        int totalItemsFound = 0;
-        int entitiesChecked = 0;
         int windowedDuctsFound = 0;
+        int totalDuctsScanned = 0;
+        int itemDuctsFound = 0;
         
         // Check block entities in a reasonable area around the camera
         int minX = (int) Math.floor(cameraPos.x - renderDistance);
@@ -99,46 +117,56 @@ public class ItemTransportRenderer {
         int minZ = (int) Math.floor(cameraPos.z - renderDistance);
         int maxZ = (int) Math.ceil(cameraPos.z + renderDistance);
         
-        System.out.println("ItemTransportRenderer: Scanning area from " + minX + "," + minY + "," + minZ + " to " + maxX + "," + maxY + "," + maxZ + " around camera at " + cameraPos);
-        
-        for (int x = minX; x <= maxX; x += 1) { // Check every block to ensure we don't miss any ducts
-            for (int y = minY; y <= maxY; y += 1) {
-                for (int z = minZ; z <= maxZ; z += 1) {
+        // Sample every block for better accuracy when finding ducts
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    totalDuctsScanned++;
                     BlockPos pos = new BlockPos(x, y, z);
                     BlockEntity blockEntity = level.getBlockEntity(pos);
                     if (blockEntity instanceof ItemDuctBlockEntity ductEntity) {
-                        entitiesChecked++;
-                        System.out.println("ItemTransportRenderer: Found ItemDuctBlockEntity at " + pos + " - windowed=" + ductEntity.isWindowed());
-                        
+                        itemDuctsFound++;
                         if (ductEntity.isWindowed()) {
                             windowedDuctsFound++;
                             List<ItemDuctBlockEntity.ItemTransitData> transitItems = ductEntity.getRenderItemsInTransit();
-                            totalItemsFound += transitItems.size();
                             
-                            System.out.println("ItemTransportRenderer: Windowed duct at " + pos + " has " + transitItems.size() + " transit items");
+                            if (level.getGameTime() % 60 == 0 || !transitItems.isEmpty()) {
+                                System.out.println("CLIENT: Found windowed duct at " + pos + " with " + transitItems.size() + " transit items");
+                            }
                             
                             for (ItemDuctBlockEntity.ItemTransitData transitData : transitItems) {
-                                System.out.println("ItemTransportRenderer: Rendering item " + transitData.stack.getItem() + " at " + transitData.position);
-                                renderTransitItemFromData(transitData, poseStack, bufferSource, partialTick);
+                                // Add smooth movement with partial tick interpolation
+                                renderTransitItemWithInterpolation(transitData, poseStack, bufferSource, partialTick);
                                 itemCount++;
-                                System.out.println("ItemTransportRenderer: Successfully rendered item " + transitData.stack.getItem());
                             }
-                        } else {
-                            // Also check non-windowed ducts to see if they have transit data (they shouldn't but let's verify)
-                            List<ItemDuctBlockEntity.ItemTransitData> transitItems = ductEntity.getRenderItemsInTransit();
-                            if (!transitItems.isEmpty()) {
-                                System.out.println("ItemTransportRenderer: WARNING - Non-windowed duct at " + pos + " has " + transitItems.size() + " transit items (should be 0)");
-                            }
+                        } else if (level.getGameTime() % 60 == 0) {
+                            System.out.println("CLIENT: Found non-windowed duct at " + pos);
                         }
                     }
                 }
             }
         }
         
-        // Always log to debug the issue
-        System.out.println("ItemTransportRenderer: Checked " + entitiesChecked + " ducts (" + windowedDuctsFound + " windowed), found " + totalItemsFound + " transit items, rendered " + itemCount + " items");
+        
+        // Log scan results every 60 frames to avoid spam
+        if (level.getGameTime() % 60 == 0) {
+            System.out.println("ItemTransportRenderer: Scanned " + totalDuctsScanned + " positions, found " + itemDuctsFound + " item ducts (" + windowedDuctsFound + " windowed), rendered " + itemCount + " items");
+            System.out.println("ItemTransportRenderer: Camera at " + cameraPos + ", scanning from (" + minX + "," + minY + "," + minZ + ") to (" + maxX + "," + maxY + "," + maxZ + ")");
+        }
         
         return itemCount;
+    }
+    
+    private static boolean shouldRenderAtPosition(Vec3 position, Level level) {
+        // Check if the position is within a windowed duct
+        BlockPos blockPos = new BlockPos((int)Math.floor(position.x), (int)Math.floor(position.y), (int)Math.floor(position.z));
+        BlockEntity blockEntity = level.getBlockEntity(blockPos);
+        
+        if (blockEntity instanceof ItemDuctBlockEntity ductEntity) {
+            return ductEntity.isWindowed();
+        }
+        
+        return false;
     }
 
     private static void renderItemsForGrid(ItemGrid grid, PoseStack poseStack, MultiBufferSource bufferSource, float partialTick) {
@@ -199,24 +227,58 @@ public class ItemTransportRenderer {
         return false;
     }
     
-    private static void renderTransitItemFromData(ItemDuctBlockEntity.ItemTransitData transitData, PoseStack poseStack, MultiBufferSource bufferSource, float partialTick) {
+    private static void renderTransitItemWithInterpolation(ItemDuctBlockEntity.ItemTransitData transitData, PoseStack poseStack, MultiBufferSource bufferSource, float partialTick) {
+        Vec3 basePosition = transitData.position;
+        
+        System.out.println("CLIENT: renderTransitItemWithInterpolation called for item " + transitData.stack.getItem() + " at " + basePosition);
+        
         poseStack.pushPose();
-        poseStack.translate(transitData.position.x, transitData.position.y, transitData.position.z);
+        
+        // Get camera position for relative translation
+        Vec3 cameraPos = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        
+        // Translate relative to camera position (this is crucial for world rendering)
+        double relativeX = basePosition.x - cameraPos.x;
+        double relativeY = basePosition.y - cameraPos.y;
+        double relativeZ = basePosition.z - cameraPos.z;
+        
+        poseStack.translate(relativeX, relativeY, relativeZ);
+        System.out.println("CLIENT: Translated to relative position (" + relativeX + ", " + relativeY + ", " + relativeZ + ") from world " + basePosition + " camera " + cameraPos);
         
         // Add some rotation and bobbing for visual appeal
         float time = System.currentTimeMillis() * 0.001f;
-        float bobbing = Mth.sin(time * 2.0f) * 0.025f;
+        float bobbing = Mth.sin(time * 2.0f) * 0.1f;
         float rotation = time * 45.0f; // 45 degrees per second
         
         poseStack.translate(0, bobbing, 0);
         poseStack.mulPose(Axis.YP.rotationDegrees(rotation));
-        poseStack.scale(0.5f, 0.5f, 0.5f); // Make items smaller when flowing
         
-        // Render the item
-        BakedModel model = itemRenderer.getModel(transitData.stack, null, null, 0);
-        itemRenderer.render(transitData.stack, ItemDisplayContext.GROUND, false, poseStack, bufferSource, 15728880, 0, model);
+        // Scale to visible size
+        poseStack.scale(0.5f, 0.5f, 0.5f);
+        System.out.println("CLIENT: Applied transforms - bobbing=" + bobbing + " rotation=" + rotation);
+        
+        // Force maximum brightness
+        int lightLevel = 15728880; // Full bright
+        
+        try {
+            BakedModel model = itemRenderer.getModel(transitData.stack, null, null, 0);
+            System.out.println("CLIENT: Got model: " + model);
+            
+            // Render the item using GROUND context - this is the most reliable for world rendering
+            itemRenderer.render(transitData.stack, ItemDisplayContext.GROUND, false, poseStack, bufferSource, lightLevel, 0, model);
+            System.out.println("CLIENT: ItemRenderer.render() called successfully");
+            
+        } catch (Exception e) {
+            System.out.println("CLIENT: ERROR in rendering: " + e.getMessage());
+            e.printStackTrace();
+        }
         
         poseStack.popPose();
+        System.out.println("CLIENT: renderTransitItemWithInterpolation completed");
+    }
+    
+    private static void renderTransitItemFromData(ItemDuctBlockEntity.ItemTransitData transitData, PoseStack poseStack, MultiBufferSource bufferSource, float partialTick) {
+        renderTransitItemWithInterpolation(transitData, poseStack, bufferSource, partialTick);
     }
     
     private static Vec3 calculateItemCurrentPosition(ItemGrid.ItemInTransit item) {
@@ -236,9 +298,7 @@ public class ItemTransportRenderer {
         return calculatePositionAlongPath(item, progress);
     }
 
-    private static void renderTransitItem(ItemGrid.ItemInTransit item, PoseStack poseStack, MultiBufferSource bufferSource, float partialTick) {
-        Vec3 renderPos = calculateItemRenderPosition(item, partialTick);
-        
+    private static void renderTransitItem(ItemGrid.ItemInTransit item, Vec3 renderPos, PoseStack poseStack, MultiBufferSource bufferSource, float partialTick) {
         poseStack.pushPose();
         poseStack.translate(renderPos.x, renderPos.y, renderPos.z);
         
@@ -257,14 +317,19 @@ public class ItemTransportRenderer {
         
         poseStack.popPose();
     }
+    
+    private static void renderTransitItem(ItemGrid.ItemInTransit item, PoseStack poseStack, MultiBufferSource bufferSource, float partialTick) {
+        Vec3 renderPos = calculateItemRenderPosition(item, partialTick);
+        renderTransitItem(item, renderPos, poseStack, bufferSource, partialTick);
+    }
 
     private static Vec3 calculateItemRenderPosition(ItemGrid.ItemInTransit item, float partialTick) {
         // Calculate the current position along the path based on distance traveled
         double totalDistance = item.getTotalDistance();
         double currentDistance = item.distanceTraveled;
         
-        // Add partial tick interpolation for smooth movement
-        double interpolatedDistance = currentDistance + (0.1f * partialTick); // 0.1f is ITEM_SPEED from ItemGrid
+        // Add partial tick interpolation for smooth movement (0.05f is ITEM_SPEED from ItemGrid)
+        double interpolatedDistance = currentDistance + (0.05f * partialTick);
         double progress = Math.min(1.0, interpolatedDistance / totalDistance);
         
         if (item.path.size() <= 1) {

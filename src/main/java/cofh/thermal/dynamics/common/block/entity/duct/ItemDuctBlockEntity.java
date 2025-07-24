@@ -24,6 +24,7 @@ import org.apache.logging.log4j.Logger;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import static cofh.thermal.dynamics.init.registries.TDynBlockEntities.ITEM_DUCT_BLOCK_ENTITY;
@@ -84,40 +85,68 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
     public void update() {
         // Only send packets if we're properly initialized
         if (level != null && !level.isClientSide && hasLevel()) {
+            System.out.println("SERVER: ItemDuctBlockEntity.update() called at " + worldPosition + " windowed=" + windowed);
+            // Update render items before sending packet
+            if (windowed) {
+                updateRenderItems();
+                System.out.println("SERVER: updateRenderItems() completed, sending " + renderItemsInTransit.size() + " items to client");
+            }
             TileStatePacket.sendToClient(this);
         }
     }
     
     public void updateRenderItems() {
-        if (level == null || level.isClientSide) return;
+        System.out.println("SERVER: updateRenderItems() called at " + worldPosition + " windowed=" + windowed);
+        
+        if (level == null || level.isClientSide) {
+            System.out.println("SERVER: Early return - level=" + level + " isClientSide=" + (level != null ? level.isClientSide : "null"));
+            return;
+        }
         
         // Only update windowed ducts
-        if (!windowed) return;
+        if (!windowed) {
+            System.out.println("SERVER: Early return - not windowed");
+            return;
+        }
         
-        // Collect items in transit that pass through this duct
+        // Collect items in transit that should be rendered in this duct
         List<ItemTransitData> newRenderItems = new ArrayList<>();
         
         ItemGrid grid = getGrid();
+        System.out.println("SERVER: Got grid: " + grid);
+        
         if (grid != null) {
-            for (ItemGrid.ItemInTransit item : grid.getItemsInTransit()) {
-                Vec3 currentPos = calculateItemPosition(item);
-                BlockPos itemBlockPos = new BlockPos((int)Math.floor(currentPos.x), (int)Math.floor(currentPos.y), (int)Math.floor(currentPos.z));
+            Collection<ItemGrid.ItemInTransit> itemsInTransit = grid.getItemsInTransit();
+            System.out.println("SERVER: Grid has " + itemsInTransit.size() + " items in transit");
+            
+            for (ItemGrid.ItemInTransit item : itemsInTransit) {
+                System.out.println("SERVER: Processing item " + item.stack.getItem() + " origin=" + item.origin + " dest=" + item.destination + " path=" + item.path);
                 
-                // If item is currently at this duct position, add to render data
-                if (itemBlockPos.equals(worldPosition)) {
-                    newRenderItems.add(new ItemTransitData(item.stack, currentPos));
-                    System.out.println("ItemDuctBlockEntity: Item " + item.stack.getItem() + " is at duct " + worldPosition + " at position " + currentPos);
+                // Check if this duct is part of the item's travel path
+                boolean isOnPath = isDuctOnItemPath(item);
+                System.out.println("SERVER: isDuctOnItemPath(" + worldPosition + ") = " + isOnPath);
+                
+                if (isOnPath) {
+                    // Calculate where the item should be rendered relative to this duct
+                    Vec3 renderPosition = calculateItemRenderPositionForDuct(item);
+                    System.out.println("SERVER: calculateItemRenderPositionForDuct returned: " + renderPosition);
+                    
+                    if (renderPosition != null) {
+                        newRenderItems.add(new ItemTransitData(item.stack, renderPosition));
+                        System.out.println("SERVER: Added item to render list at position " + renderPosition);
+                    } else {
+                        System.out.println("SERVER: Render position was null, not adding item");
+                    }
+                } else {
+                    System.out.println("SERVER: Duct not on item path, skipping");
                 }
             }
+        } else {
+            System.out.println("SERVER: Grid is null!");
         }
         
-        // Always send packet if we have items OR if the count changed (including from items to no items)
-        if (!newRenderItems.equals(renderItemsInTransit)) {
-            System.out.println("ItemDuctBlockEntity: Updating render items from " + renderItemsInTransit.size() + " to " + newRenderItems.size() + " items for windowed duct at " + worldPosition);
-            renderItemsInTransit = newRenderItems;
-            System.out.println("ItemDuctBlockEntity: Sending packet with " + newRenderItems.size() + " transit items for windowed=" + windowed + " at " + worldPosition);
-            TileStatePacket.sendToClient(this);
-        }
+        System.out.println("SERVER: Final render items count: " + newRenderItems.size());
+        renderItemsInTransit = newRenderItems;
     }
     
     private Vec3 calculateItemPosition(ItemGrid.ItemInTransit item) {
@@ -126,13 +155,129 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
         double progress = Math.min(1.0, currentDistance / totalDistance);
         
         if (item.path.size() <= 1) {
+            // Direct connection - interpolate between origin and destination
             Vec3 origin = Vec3.atCenterOf(item.origin);
             Vec3 destination = Vec3.atCenterOf(item.destination);
             return origin.lerp(destination, progress);
         }
         
-        // Calculate position along path (simplified for now)
-        return Vec3.atCenterOf(worldPosition);
+        // Multi-segment path - calculate position along the full path
+        return calculatePositionAlongPath(item, progress);
+    }
+    
+    private Vec3 calculatePositionAlongPath(ItemGrid.ItemInTransit item, double progress) {
+        // Calculate cumulative distances for each path segment
+        double totalDistance = item.getTotalDistance();
+        double targetDistance = progress * totalDistance;
+        
+        Vec3 currentPos = Vec3.atCenterOf(item.origin);
+        double accumulatedDistance = 0;
+        
+        // Create list of all waypoints: origin -> path nodes -> destination
+        List<Vec3> waypoints = new ArrayList<>();
+        waypoints.add(Vec3.atCenterOf(item.origin));
+        for (BlockPos pathPos : item.path) {
+            waypoints.add(Vec3.atCenterOf(pathPos));
+        }
+        waypoints.add(Vec3.atCenterOf(item.destination));
+        
+        // Find which segment the item is currently on
+        for (int i = 0; i < waypoints.size() - 1; i++) {
+            Vec3 segmentStart = waypoints.get(i);
+            Vec3 segmentEnd = waypoints.get(i + 1);
+            double segmentDistance = segmentStart.distanceTo(segmentEnd);
+            
+            if (targetDistance <= accumulatedDistance + segmentDistance) {
+                // Item is on this segment
+                double segmentProgress = segmentDistance > 0 ? (targetDistance - accumulatedDistance) / segmentDistance : 0;
+                return segmentStart.lerp(segmentEnd, Math.min(1.0, segmentProgress));
+            }
+            
+            accumulatedDistance += segmentDistance;
+        }
+        
+        // Fallback to destination
+        return Vec3.atCenterOf(item.destination);
+    }
+    
+    /**
+     * Check if this duct should render the item - simplified approach
+     */
+    private boolean isDuctOnItemPath(ItemGrid.ItemInTransit item) {
+        // Check if this duct is anywhere in the item's path
+        boolean isOrigin = worldPosition.equals(item.origin);
+        boolean isDestination = worldPosition.equals(item.destination);
+        boolean isInPath = false;
+        
+        for (BlockPos pathPos : item.path) {
+            if (worldPosition.equals(pathPos)) {
+                isInPath = true;
+                break;
+            }
+        }
+        
+        return isOrigin || isDestination || isInPath;
+    }
+    
+    /**
+     * Calculate where to render the item within this specific duct based on the item's progress
+     */
+    private Vec3 calculateItemRenderPositionForDuct(ItemGrid.ItemInTransit item) {
+        // Get the item's current global position
+        Vec3 globalItemPos = calculateItemPosition(item);
+        
+        // Create the full path including origin and destination
+        List<BlockPos> fullPath = new ArrayList<>();
+        fullPath.add(item.origin);
+        fullPath.addAll(item.path);
+        fullPath.add(item.destination);
+        
+        // Find which segment the item is currently on
+        double totalDistanceCovered = 0;
+        double targetDistance = item.distanceTraveled;
+        
+        for (int i = 0; i < fullPath.size() - 1; i++) {
+            BlockPos segmentStart = fullPath.get(i);
+            BlockPos segmentEnd = fullPath.get(i + 1);
+            double segmentLength = Math.sqrt(segmentStart.distSqr(segmentEnd));
+            
+            // Check if this duct is involved in this segment
+            boolean isDuctInThisSegment = worldPosition.equals(segmentStart) || worldPosition.equals(segmentEnd);
+            
+            if (isDuctInThisSegment && targetDistance >= totalDistanceCovered && targetDistance <= totalDistanceCovered + segmentLength) {
+                // Item is currently traveling through a segment involving this duct
+                double progressInSegment = (targetDistance - totalDistanceCovered) / segmentLength;
+                
+                // If this duct is the start of the segment, show item moving out
+                // If this duct is the end of the segment, show item moving in
+                if (worldPosition.equals(segmentStart)) {
+                    // Item is leaving this duct
+                    Vec3 startPos = Vec3.atCenterOf(segmentStart);
+                    Vec3 endPos = Vec3.atCenterOf(segmentEnd);
+                    return startPos.lerp(endPos, progressInSegment);
+                } else if (worldPosition.equals(segmentEnd)) {
+                    // Item is approaching this duct
+                    Vec3 startPos = Vec3.atCenterOf(segmentStart);
+                    Vec3 endPos = Vec3.atCenterOf(segmentEnd);
+                    return startPos.lerp(endPos, progressInSegment);
+                }
+            }
+            
+            totalDistanceCovered += segmentLength;
+        }
+        
+        // If we get here, item might be stationary at this duct position
+        if (worldPosition.equals(item.origin) || worldPosition.equals(item.destination)) {
+            return Vec3.atCenterOf(worldPosition);
+        }
+        
+        for (BlockPos pathPos : item.path) {
+            if (worldPosition.equals(pathPos)) {
+                return Vec3.atCenterOf(worldPosition);
+            }
+        }
+        
+        return null; // Don't render if item isn't related to this duct
     }
     
     // region NETWORK
@@ -150,39 +295,13 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
     // STATE
     @Override
     public FriendlyByteBuf getStatePacket(FriendlyByteBuf buffer) {
-        // Server-side: collect current transit items for this duct
-        List<ItemTransitData> currentTransitItems = new ArrayList<>();
-        
-        try {
-            if (windowed && level != null && !level.isClientSide) {
-                ItemGrid grid = getGrid();
-                if (grid != null) {
-                    for (ItemGrid.ItemInTransit item : grid.getItemsInTransit()) {
-                        Vec3 currentPos = calculateItemPosition(item);
-                        BlockPos itemBlockPos = new BlockPos((int)Math.floor(currentPos.x), (int)Math.floor(currentPos.y), (int)Math.floor(currentPos.z));
-                        
-                        // If item is currently at this duct position, add to packet data
-                        if (itemBlockPos.equals(worldPosition)) {
-                            currentTransitItems.add(new ItemTransitData(item.stack, currentPos));
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // Don't let packet errors prevent normal operation
-            System.out.println("ItemDuctBlockEntity: Error collecting transit items for packet: " + e.getMessage());
-        }
-        
-        buffer.writeInt(currentTransitItems.size());
-        for (ItemTransitData itemData : currentTransitItems) {
+        // Send the current render items that were calculated for this duct
+        buffer.writeInt(renderItemsInTransit.size());
+        for (ItemTransitData itemData : renderItemsInTransit) {
             buffer.writeItem(itemData.stack);
             buffer.writeDouble(itemData.position.x);
             buffer.writeDouble(itemData.position.y);
             buffer.writeDouble(itemData.position.z);
-        }
-        
-        if (!currentTransitItems.isEmpty()) {
-            System.out.println("ItemDuctBlockEntity: getStatePacket sending " + currentTransitItems.size() + " items for windowed=" + windowed + " at " + worldPosition);
         }
         
         super.getStatePacket(buffer);
@@ -191,8 +310,12 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
 
     @Override
     public void handleStatePacket(FriendlyByteBuf buffer) {
+        System.out.println("CLIENT: handleStatePacket called at " + worldPosition);
+        
         renderItemsInTransit.clear();
         int count = buffer.readInt();
+        System.out.println("CLIENT: Reading " + count + " items from packet");
+        
         for (int i = 0; i < count; i++) {
             ItemStack stack = buffer.readItem();
             double x = buffer.readDouble();
@@ -200,21 +323,12 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
             double z = buffer.readDouble();
             ItemTransitData transitData = new ItemTransitData(stack, new Vec3(x, y, z));
             renderItemsInTransit.add(transitData);
+            System.out.println("CLIENT: Received item " + stack.getItem() + " at position (" + x + ", " + y + ", " + z + ")");
         }
         
         super.handleStatePacket(buffer);
         
-        System.out.println("ItemDuctBlockEntity: Received " + count + " transit items on client for windowed=" + windowed + " at " + worldPosition);
-        
-        // Debug: Show what we actually stored
-        for (int i = 0; i < renderItemsInTransit.size(); i++) {
-            ItemTransitData item = renderItemsInTransit.get(i);
-            System.out.println("ItemDuctBlockEntity: Stored transit item " + i + ": " + item.stack.getItem() + " at " + item.position);
-        }
-        
-        // Verify the data is accessible
-        List<ItemTransitData> testList = getRenderItemsInTransit();
-        System.out.println("ItemDuctBlockEntity: getRenderItemsInTransit() returns " + testList.size() + " items");
+        System.out.println("CLIENT: Final renderItemsInTransit size: " + renderItemsInTransit.size());
     }
     // endregion
     

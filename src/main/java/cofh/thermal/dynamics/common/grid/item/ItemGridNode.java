@@ -13,6 +13,7 @@ import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.items.IItemHandler;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Grid node for item transport networks.
@@ -213,15 +214,18 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
     }
 
     public DestinationResult findBestDestination(ItemStack stack) {
-        // For now, return first available destination that doesn't have a servo extracting from it
-        // TODO: Implement smart routing based on filters, priorities, etc.
+        // Sort destinations by path length to prioritize shortest paths
         System.out.println("ItemFlow: Finding destination for " + stack.getItem() + " from node " + pos + " - checking " + destinationCache.size() + " cached destinations");
         
-        for (Map.Entry<BlockPos, PathInfo> entry : destinationCache.entrySet()) {
+        // Convert to list and sort by path length (shortest first)
+        List<Map.Entry<BlockPos, PathInfo>> sortedDestinations = new ArrayList<>(destinationCache.entrySet());
+        sortedDestinations.sort(Comparator.comparingInt(entry -> entry.getValue().path.size()));
+        
+        for (Map.Entry<BlockPos, PathInfo> entry : sortedDestinations) {
             BlockPos destPos = entry.getKey();
             PathInfo pathInfo = entry.getValue();
             
-            System.out.println("ItemFlow: Evaluating destination " + destPos + " with path length " + pathInfo.path.size());
+            System.out.println("ItemFlow: Evaluating destination " + destPos + " with path length " + pathInfo.path.size() + " (sorted by shortest path first)");
             
             BlockEntity tile = grid.getLevel().getBlockEntity(destPos);
             if (tile == null) {
@@ -289,7 +293,7 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
             }
             
             if (!hasConflictingServo) {
-                System.out.println("ItemFlow: Routing " + stack.getItem() + " to " + destPos + " via path length " + pathInfo.path.size());
+                System.out.println("ItemFlow: Selected shortest path destination - routing " + stack.getItem() + " to " + destPos + " via path length " + pathInfo.path.size());
                 return new DestinationResult(destPos, pathInfo);
             }
         }

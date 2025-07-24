@@ -132,6 +132,9 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         while (iterator.hasNext()) {
             ItemInTransit item = iterator.next();
             
+            // Check for dynamic rerouting opportunity before moving the item
+            checkAndRerouteItem(item);
+            
             // Update item position based on actual speed
             item.distanceTraveled += ITEM_SPEED;
             double totalDistance = item.getTotalDistance();
@@ -428,6 +431,141 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             item.deserializeNBT(returningList.getCompound(i));
             returningItems.add(item);
         }
+    }
+    
+    /**
+     * Check if there's a better path available and reroute the item if needed
+     */
+    private void checkAndRerouteItem(ItemInTransit item) {
+        // Don't reroute returning items
+        if (item.returning) return;
+        
+        // Calculate current position of the item
+        double totalDistance = item.getTotalDistance();
+        double progressRatio = item.distanceTraveled / totalDistance;
+        
+        // Get the current actual position
+        BlockPos currentPos = calculateCurrentPosition(item, progressRatio);
+        
+        // Find the nearest node to the item's current position
+        ItemGridNode nearestNode = findNearestNode(currentPos);
+        if (nearestNode == null) return;
+        
+        // Try to find a better destination from the current position
+        ItemGridNode.DestinationResult betterDest = nearestNode.findBestDestination(item.stack);
+        
+        // If no better destination or it's the same as current, don't reroute
+        if (betterDest == null || betterDest.destination == null || betterDest.destination.equals(item.destination)) {
+            return;
+        }
+        
+        // Check if the new destination is actually closer from current position
+        List<BlockPos> newPath = betterDest.pathInfo.path;
+        if (newPath == null || newPath.isEmpty()) return;
+        
+        // Calculate distance from current position to new destination
+        double newDistance = calculatePathDistance(currentPos, betterDest.destination, newPath);
+        
+        // Calculate remaining distance on current path
+        double remainingDistance = totalDistance - item.distanceTraveled;
+        
+        // Only reroute if the new path is significantly shorter (at least 2 blocks shorter)
+        if (newDistance < remainingDistance - 2.0) {
+            System.out.println("ItemGrid: Rerouting item " + item.stack.getItem() + " from " + item.destination + " to " + betterDest.destination + " (saves " + String.format("%.1f", remainingDistance - newDistance) + " blocks)");
+            
+            // Update destination and path
+            item.destination = betterDest.destination;
+            item.destinationSide = betterDest.pathInfo.side; // Use the correct side from pathInfo
+            item.path = newPath;
+            item.distanceTraveled = 0; // Reset distance for new path
+            
+            // Update transit tracking
+            removeItemFromTransitTracking(item);
+            addItemToTransitTracking(item);
+        }
+    }
+    
+    /**
+     * Calculate the current position of an item based on its progress
+     */
+    private BlockPos calculateCurrentPosition(ItemInTransit item, double progressRatio) {
+        if (item.path.isEmpty()) {
+            // Direct path - interpolate between origin and destination
+            return item.origin;
+        }
+        
+        // Build full path including origin and destination
+        List<BlockPos> fullPath = new ArrayList<>();
+        fullPath.add(item.origin);
+        fullPath.addAll(item.path);
+        fullPath.add(item.destination);
+        
+        // Find which segment the item is on
+        double totalDist = item.getTotalDistance();
+        double targetDist = item.distanceTraveled;
+        double accumulatedDist = 0;
+        
+        for (int i = 0; i < fullPath.size() - 1; i++) {
+            BlockPos start = fullPath.get(i);
+            BlockPos end = fullPath.get(i + 1);
+            double segmentDist = Math.sqrt(start.distSqr(end));
+            
+            if (targetDist <= accumulatedDist + segmentDist) {
+                // Item is on this segment
+                return start; // Return the start of current segment
+            }
+            
+            accumulatedDist += segmentDist;
+        }
+        
+        return item.destination; // Fallback
+    }
+    
+    /**
+     * Find the nearest grid node to a position
+     */
+    private ItemGridNode findNearestNode(BlockPos pos) {
+        ItemGridNode nearest = null;
+        double minDistance = Double.MAX_VALUE;
+        
+        for (ItemGridNode node : getNodes().values()) {
+            double dist = Math.sqrt(node.getPos().distSqr(pos));
+            if (dist < minDistance) {
+                minDistance = dist;
+                nearest = node;
+            }
+        }
+        
+        return nearest;
+    }
+    
+    /**
+     * Calculate the distance of a path from a starting position
+     */
+    private double calculatePathDistance(BlockPos start, BlockPos end, List<BlockPos> path) {
+        if (path.isEmpty()) {
+            return Math.sqrt(start.distSqr(end));
+        }
+        
+        double distance = 0;
+        BlockPos current = start;
+        
+        // Distance to first path node
+        if (!path.isEmpty()) {
+            distance += Math.sqrt(current.distSqr(path.get(0)));
+            current = path.get(0);
+        }
+        
+        // Distance between path nodes
+        for (int i = 1; i < path.size(); i++) {
+            distance += Math.sqrt(current.distSqr(path.get(i)));
+            current = path.get(i);
+        }
+        
+        // Distance to destination
+        distance += Math.sqrt(current.distSqr(end));
+        
+        return distance;
     }
 
     /**

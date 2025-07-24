@@ -83,6 +83,39 @@ public class ItemServoAttachmentMenu extends AttachmentMenu implements IFilterOp
     public List<ItemStack> getFilterStacks() {
         return filterInventory != null ? filterInventory.getStacks() : new ArrayList<>();
     }
+    
+    public int getTransferAmount() {
+        return attachment != null ? attachment.getTransfer() : 1;
+    }
+    
+    public void setTransferAmount(int amount) {
+        if (attachment != null) {
+            attachment.setTransfer(amount);
+            AttachmentConfigPacket.sendToServer(attachment);
+        }
+    }
+    
+    public void incrementTransferAmount() {
+        if (attachment != null) {
+            attachment.incrementTransfer();
+            AttachmentConfigPacket.sendToServer(attachment);
+        }
+    }
+    
+    public void decrementTransferAmount() {
+        if (attachment != null) {
+            attachment.decrementTransfer();
+            AttachmentConfigPacket.sendToServer(attachment);
+        }
+    }
+    
+    public int getMinTransferAmount() {
+        return attachment != null ? attachment.getMinTransfer() : 1;
+    }
+    
+    public int getMaxTransferAmount() {
+        return attachment != null ? attachment.getMaxTransfer() : 8;
+    }
 
     @Override
     protected int getMergeableSlotCount() {

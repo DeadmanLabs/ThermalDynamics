@@ -23,4 +23,9 @@ public class ItemTurboServoAttachmentMenu extends ItemServoAttachmentMenu {
             this.turboAttachment = null;
         }
     }
+    
+    @Override
+    public int getMaxTransferAmount() {
+        return turboAttachment != null ? turboAttachment.getMaxTransfer() : 64;
+    }
 }

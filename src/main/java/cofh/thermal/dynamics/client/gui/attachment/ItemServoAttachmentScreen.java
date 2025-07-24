@@ -64,13 +64,41 @@ public class ItemServoAttachmentScreen extends ContainerScreenCoFH<ItemServoAtta
 
     @Override
     protected void renderLabels(GuiGraphics pGuiGraphics, int mouseX, int mouseY) {
-        String output = format(attachment.getTransfer());
+        String output = format(menu.getTransferAmount());
         pGuiGraphics.drawString(font, output, getCenteredOffset(output, 151), 51, 0x404040, false);
         super.renderLabels(pGuiGraphics, mouseX, mouseY);
     }
 
     // region ELEMENTS
     protected void addButtons() {
+        // Increment transfer amount button
+        addElement(new ElementButton(this, 130, 46) {
+            @Override
+            public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
+                menu.incrementTransferAmount();
+                playClickSound(0.7F);
+                return true;
+            }
+        }
+                .setSize(12, 12)
+                .setTexture(TEX_INCREMENT, 24, 12)
+                .setTooltipFactory(new SimpleTooltip(Component.translatable("info.thermal.increment_transfer")))
+                .setVisible(() -> menu.getTransferAmount() < menu.getMaxTransferAmount()));
+
+        // Decrement transfer amount button
+        addElement(new ElementButton(this, 130, 58) {
+            @Override
+            public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
+                menu.decrementTransferAmount();
+                playClickSound(0.4F);
+                return true;
+            }
+        }
+                .setSize(12, 12)
+                .setTexture(TEX_DECREMENT, 24, 12)
+                .setTooltipFactory(new SimpleTooltip(Component.translatable("info.thermal.decrement_transfer")))
+                .setVisible(() -> menu.getTransferAmount() > menu.getMinTransferAmount()));
+
         addElement(new ElementButton(this, 105, 22) {
             @Override
             public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {

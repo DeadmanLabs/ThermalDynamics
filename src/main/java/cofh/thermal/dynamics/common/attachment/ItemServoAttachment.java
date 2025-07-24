@@ -42,13 +42,14 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
 
     public static final Component DISPLAY_NAME = Component.translatable("attachment.thermal.servo");
 
-    public static final int TRANSFER = 8; // Items per operation
-    public static final int MAX_TRANSFER = 64; // Max items in burst
+    public static final int DEFAULT_TRANSFER = 1; // Default items per operation  
+    public static final int MIN_TRANSFER = 1; // Minimum items per operation
+    public static final int MAX_TRANSFER = 8; // Maximum items per operation for regular servo
 
     protected final IDuct<?, ?> duct;
     protected final Direction side;
 
-    public int amountTransfer = TRANSFER;
+    public int amountTransfer = DEFAULT_TRANSFER;
     
     // Extraction timing - extract every 5 seconds (100 ticks)
     private int extractionCooldown = 0;
@@ -70,7 +71,27 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     }
 
     public int getTransfer() {
-        return TRANSFER;
+        return amountTransfer;
+    }
+    
+    public void setTransfer(int amount) {
+        amountTransfer = Math.max(MIN_TRANSFER, Math.min(MAX_TRANSFER, amount));
+    }
+    
+    public void incrementTransfer() {
+        setTransfer(amountTransfer + 1);
+    }
+    
+    public void decrementTransfer() {
+        setTransfer(amountTransfer - 1);
+    }
+    
+    public int getMinTransfer() {
+        return MIN_TRANSFER;
+    }
+    
+    public int getMaxTransfer() {
+        return MAX_TRANSFER;
     }
 
     public ItemStackHandler getOverflowStorage() {
@@ -185,12 +206,12 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
             
             System.out.println("ItemServo: Got ItemGrid and external handler, proceeding with extraction");
             System.out.println("ItemServo: External handler has " + externalHandler.getSlots() + " slots");
+            System.out.println("ItemServo: Configured to extract " + amountTransfer + " items per operation");
             
-            // Extract just 1 item per operation for slower, more controlled transfer
-            amountTransfer = 1;
+            int remainingToExtract = amountTransfer;
             
             // Try to extract items from external inventory
-            for (int slot = 0; slot < externalHandler.getSlots() && amountTransfer > 0; slot++) {
+            for (int slot = 0; slot < externalHandler.getSlots() && remainingToExtract > 0; slot++) {
                 try {
                     ItemStack slotStack = externalHandler.getStackInSlot(slot);
                     if (slotStack.isEmpty()) {
@@ -200,7 +221,7 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
                     System.out.println("ItemServo: Checking slot " + slot + " with " + slotStack.getCount() + "x " + slotStack.getItem());
                     
                     // Test extraction first
-                    ItemStack extractable = externalHandler.extractItem(slot, Math.min(amountTransfer, 64), true);
+                    ItemStack extractable = externalHandler.extractItem(slot, Math.min(remainingToExtract, 64), true);
                     if (extractable.isEmpty()) {
                         System.out.println("ItemServo: Cannot extract from slot " + slot);
                         continue;
@@ -230,8 +251,8 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
                         continue;
                     }
                     
-                    // Extract only what can fit
-                    int toExtract = Math.min(extractable.getCount(), Math.min(amountTransfer, availableCapacity));
+                    // Extract only what can fit and what we still need to extract
+                    int toExtract = Math.min(extractable.getCount(), Math.min(remainingToExtract, availableCapacity));
                     
                     ItemStack extracted = externalHandler.extractItem(slot, toExtract, false);
                     if (extracted.isEmpty()) {
@@ -239,11 +260,11 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
                         continue;
                     }
                     
-                    System.out.println("ItemServo: Successfully extracted " + extracted.getCount() + "x " + extracted.getItem() + " from " + pos() + " -> routing to " + destPos);
+                    System.out.println("ItemServo: Successfully extracted " + extracted.getCount() + "x " + extracted.getItem() + " from " + pos() + " -> routing to " + destPos + " (remaining: " + (remainingToExtract - extracted.getCount()) + ")");
                     
                     // Route item through grid
                     itemGrid.insertItem(extracted, pos(), side(), destPos, pathInfo.side, pathInfo.path);
-                    amountTransfer -= extracted.getCount();
+                    remainingToExtract -= extracted.getCount();
                     
                     System.out.println("ItemServo: Inserted item into grid for transport");
                     
@@ -368,6 +389,7 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     public FriendlyByteBuf getConfigPacket(FriendlyByteBuf buffer) {
         buffer.writeBoolean(filter.getAllowList());
         buffer.writeBoolean(filter.getCheckNBT());
+        buffer.writeInt(amountTransfer);
         return buffer;
     }
 
@@ -375,6 +397,7 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     public void handleConfigPacket(FriendlyByteBuf buffer) {
         filter.setAllowList(buffer.readBoolean());
         filter.setCheckNBT(buffer.readBoolean());
+        setTransfer(buffer.readInt());
     }
 
     @Override
@@ -382,6 +405,7 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
         rsControl.writeToBuffer(buffer);
         buffer.writeBoolean(filter.getAllowList());
         buffer.writeBoolean(filter.getCheckNBT());
+        buffer.writeInt(amountTransfer);
         return buffer;
     }
 
@@ -390,6 +414,7 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
         rsControl.readFromBuffer(buffer);
         filter.setAllowList(buffer.readBoolean());
         filter.setCheckNBT(buffer.readBoolean());
+        setTransfer(buffer.readInt());
     }
     // endregion
 

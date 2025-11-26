@@ -261,16 +261,10 @@ public class ItemTransportRenderer {
 
         poseStack.translate(relativeX, relativeY, relativeZ);
 
-        // Progress-based rotation: item spins as it travels through the duct
-        // Slowed down: 2 full spins over the journey (was 4)
-        float progressRotation = transitData.progress * 720f * 2f;
-
-        // Add time-based continuous rotation for extra smoothness (slowed by half)
-        long timeMillis = System.currentTimeMillis();
-        float timeRotation = (timeMillis * 0.09f) % 360f; // Halved from 0.18f
-
-        // Combined rotation
-        float totalRotation = (progressRotation + timeRotation) % 360f;
+        // Time-based rotation only - consistent spin rate for all items regardless of route length
+        // Use modulo to keep time value small enough for float precision
+        float timeSeconds = (System.currentTimeMillis() % 100000) * 0.001f;
+        float totalRotation = (timeSeconds * 90f) % 360f; // 90 degrees per second = 1 full rotation every 4 seconds
 
         // Gentle bobbing based on progress
         float bobbing = Mth.sin(transitData.progress * 6.28f * 2f) * 0.03f;

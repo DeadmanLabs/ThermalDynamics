@@ -51,11 +51,8 @@ public class ItemTurboServoAttachment extends ItemServoAttachment {
     @Override
     public void tick() {
         if (!rsControl.getState()) {
-            System.out.println("ItemTurboServo: Redstone control disabled at " + pos() + " side " + side());
             return;
         }
-        
-        System.out.println("ItemTurboServo: Attempting extraction at " + pos() + " side " + side());
         
         // Extract items from connected inventory and route through grid (turbo version - no cooldown)
         extractAndRouteItems();
@@ -63,37 +60,27 @@ public class ItemTurboServoAttachment extends ItemServoAttachment {
     
     private void extractAndRouteItems() {
         try {
-            System.out.println("ItemTurboServo: extractAndRouteItems called at " + pos() + " side " + side());
-            
             // Get connected external inventory
             LazyOptional<net.minecraftforge.items.IItemHandler> extCap = getExternalCapability();
             if (!extCap.isPresent()) {
-                System.out.println("ItemTurboServo: No external capability at " + pos() + " side " + side());
                 return;
             }
             
             net.minecraftforge.items.IItemHandler externalHandler = extCap.orElse(null);
             if (externalHandler == null) {
-                System.out.println("ItemTurboServo: External handler is null at " + pos() + " side " + side());
                 return;
             }
             
             // Get grid for routing
             if (!(duct.getGrid() instanceof cofh.thermal.dynamics.common.grid.item.ItemGrid itemGrid)) {
-                System.out.println("ItemTurboServo: Grid is not ItemGrid at " + pos() + " side " + side() + " - got " + (duct.getGrid() != null ? duct.getGrid().getClass().getSimpleName() : "null"));
                 return;
             }
             
             // Get our grid node
             cofh.thermal.dynamics.common.grid.item.ItemGridNode ourNode = itemGrid.getNodes().get(pos());
             if (ourNode == null) {
-                System.out.println("ItemTurboServo: No grid node found at " + pos());
                 return;
             }
-            
-            System.out.println("ItemTurboServo: Got ItemGrid and external handler, proceeding with extraction");
-            System.out.println("ItemTurboServo: External handler has " + externalHandler.getSlots() + " slots");
-            System.out.println("ItemTurboServo: Configured to extract " + amountTransfer + " items per operation");
             
             int remainingToExtract = amountTransfer;
             
@@ -105,36 +92,28 @@ public class ItemTurboServoAttachment extends ItemServoAttachment {
                         continue;
                     }
                     
-                    System.out.println("ItemTurboServo: Checking slot " + slot + " with " + slotStack.getCount() + "x " + slotStack.getItem());
-                    
                     // Test extraction first
                     net.minecraft.world.item.ItemStack extractable = externalHandler.extractItem(slot, Math.min(remainingToExtract, 64), true);
                     if (extractable.isEmpty()) {
-                        System.out.println("ItemTurboServo: Cannot extract from slot " + slot);
                         continue;
                     }
                     
                     if (!filter.valid(extractable)) {
-                        System.out.println("ItemTurboServo: Item " + extractable.getItem() + " failed filter check");
                         continue;
                     }
                     
                     // Find best destination for this item
                     cofh.thermal.dynamics.common.grid.item.ItemGridNode.DestinationResult destination = ourNode.findBestDestination(extractable);
                     if (destination == null) {
-                        System.out.println("ItemTurboServo: No valid destination found for " + extractable.getItem());
                         continue;
                     }
                     
                     net.minecraft.core.BlockPos destPos = destination.destination;
                     cofh.thermal.dynamics.common.grid.item.ItemGridNode.PathInfo pathInfo = destination.pathInfo;
                     
-                    System.out.println("ItemTurboServo: Found destination " + destPos + " for " + extractable.getItem());
-                    
                     // Check if destination has capacity (including items in transit)
                     int availableCapacity = itemGrid.getAvailableCapacity(destPos, pathInfo.side, extractable);
                     if (availableCapacity <= 0) {
-                        System.out.println("ItemTurboServo: No capacity available at destination " + destPos);
                         continue;
                     }
                     
@@ -143,29 +122,20 @@ public class ItemTurboServoAttachment extends ItemServoAttachment {
                     
                     net.minecraft.world.item.ItemStack extracted = externalHandler.extractItem(slot, toExtract, false);
                     if (extracted.isEmpty()) {
-                        System.out.println("ItemTurboServo: Actual extraction failed for slot " + slot);
                         continue;
                     }
-                    
-                    System.out.println("ItemTurboServo: Successfully extracted " + extracted.getCount() + "x " + extracted.getItem() + " from " + pos() + " -> routing to " + destPos + " (remaining: " + (remainingToExtract - extracted.getCount()) + ")");
                     
                     // Route item through grid
                     itemGrid.insertItem(extracted, pos(), side(), destPos, pathInfo.side, pathInfo.path);
                     remainingToExtract -= extracted.getCount();
                     
-                    System.out.println("ItemTurboServo: Inserted item into grid for transport");
-                    
                 } catch (Exception e) {
-                    System.out.println("ItemTurboServo: Exception processing slot " + slot + ": " + e.getMessage());
-                    e.printStackTrace();
+                    // Silent failure for performance
                 }
             }
             
-            System.out.println("ItemTurboServo: Extraction cycle completed");
-            
         } catch (Exception e) {
-            System.out.println("ItemTurboServo: Exception during extraction: " + e.getMessage());
-            e.printStackTrace();
+            // Silent failure for performance
         }
     }
     

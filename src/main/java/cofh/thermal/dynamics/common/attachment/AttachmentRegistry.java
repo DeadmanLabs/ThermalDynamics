@@ -59,20 +59,9 @@ public class AttachmentRegistry {
     }
 
     public static IAttachment getAttachment(String type, CompoundTag nbt, IDuct<?, ?> duct, Direction side) {
-        System.out.println("=== AttachmentRegistry.getAttachment ===");
-        System.out.println("Type: " + type);
-        System.out.println("Duct grid type: " + duct.getGridType());
-        System.out.println("Available factories: " + ATTACHMENT_FACTORY_MAP.keySet());
-        System.out.println("Contains factory for " + type + ": " + ATTACHMENT_FACTORY_MAP.containsKey(type));
-        
         if (ATTACHMENT_FACTORY_MAP.containsKey(type)) {
-            System.out.println("Factory found, calling createAttachment...");
-            IAttachment result = ATTACHMENT_FACTORY_MAP.get(type).createAttachment(nbt, duct, side);
-            System.out.println("Factory returned: " + result);
-            System.out.println("Result class: " + (result != null ? result.getClass().getSimpleName() : "null"));
-            return result;
+            return ATTACHMENT_FACTORY_MAP.get(type).createAttachment(nbt, duct, side);
         }
-        System.out.println("No factory found, returning EmptyAttachment");
         return EmptyAttachment.INSTANCE;
     }
 

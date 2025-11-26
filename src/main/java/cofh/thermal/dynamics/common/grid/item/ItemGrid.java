@@ -37,22 +37,28 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     
     // Speed in blocks per tick (0.05 = 1 block per second at 20 TPS for better visibility)
     private static final float ITEM_SPEED = 0.05f;
-    
+
     // Queue for items in transit - using concurrent queue for thread safety
     private final Queue<ItemInTransit> itemsInTransit = new ConcurrentLinkedQueue<>();
-    
+
     // Items that need to be returned due to backup
     private final Queue<ItemInTransit> returningItems = new ConcurrentLinkedQueue<>();
-    
+
     // Track items in transit to destinations for capacity calculation
     private final Map<BlockPos, Map<Direction, Integer>> itemsInTransitToDestination = new ConcurrentHashMap<>();
+
+    /**
+     * Topology version when items were last checked for path validity.
+     * When this differs from current topology, all items need path revalidation.
+     */
+    private long lastCheckedTopologyVersion = -1;
 
     public ItemGrid(UUID id, Level world) {
         super(ITEM_GRID.get(), id, world);
         
         // Register this grid for client-side rendering (both server and client)
         activeGrids.computeIfAbsent(world, k -> ConcurrentHashMap.newKeySet()).add(this);
-        System.out.println("ItemFlow: Registered ItemGrid on " + (world.isClientSide ? "client" : "server"));
+        // Grid registered for item transport
     }
     
     /**
@@ -86,72 +92,134 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     @Override
     public void tick() {
         super.tick();
-        
-        // Process items in transit
-        processItemsInTransit();
-        
-        // Process returning items
-        processReturningItems();
-        
-        // Update render data for all duct nodes
-        updateRenderData();
+
+        // Skip item processing if no items are in transit (optimization)
+        boolean hasItems = !itemsInTransit.isEmpty() || !returningItems.isEmpty();
+
+        if (hasItems) {
+            // Check if topology changed - need to validate/backflow items
+            long currentTopology = getTopologyVersion();
+            if (lastCheckedTopologyVersion != currentTopology) {
+                handleTopologyChange();
+                lastCheckedTopologyVersion = currentTopology;
+            }
+
+            // Process items in transit
+            processItemsInTransit();
+
+            // Process returning items
+            processReturningItems();
+
+            // Update render data only for windowed ducts with items nearby
+            updateRenderData();
+        }
     }
     
+    /**
+     * Handle topology changes by validating all items' paths.
+     * Items with invalid paths are reversed back to their origin.
+     */
+    private void handleTopologyChange() {
+        Iterator<ItemInTransit> iterator = itemsInTransit.iterator();
+        while (iterator.hasNext()) {
+            ItemInTransit item = iterator.next();
+
+            // Check if the item's destination is still valid
+            if (!isPathValid(item)) {
+                // Path is broken - initiate backflow to origin
+                item.reverse();
+                item.distanceTraveled = 0;
+                removeItemFromTransitTracking(item);
+                returningItems.add(item);
+                iterator.remove();
+
+                // Notify the origin servo about the backflow
+                notifyServoOfBackflow(item);
+            }
+        }
+    }
+
+    /**
+     * Check if an item's path is still valid after a topology change.
+     */
+    private boolean isPathValid(ItemInTransit item) {
+        // Check if destination still exists and has item handler
+        BlockEntity destTile = world.getBlockEntity(item.destination);
+        if (destTile == null) {
+            return false;
+        }
+
+        // Check if the destination can still accept items
+        if (!destTile.getCapability(ForgeCapabilities.ITEM_HANDLER, item.destinationSide).isPresent()) {
+            return false;
+        }
+
+        // Check if the path through ducts is still connected
+        // We check that each node in the path still exists in the grid
+        for (BlockPos pathPos : item.path) {
+            if (!getNodes().containsKey(pathPos)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Notify a servo that an item is being backflowed to it.
+     */
+    private void notifyServoOfBackflow(ItemInTransit item) {
+        // The item's new destination (after reverse) is the original origin
+        BlockPos originPos = item.destination;
+        Direction originSide = item.destinationSide;
+
+        ItemGridNode originNode = getNodes().get(originPos);
+        if (originNode != null && originNode.getDuct() != null) {
+            if (originNode.getDuct().getAttachment(originSide) instanceof cofh.thermal.dynamics.common.attachment.ItemServoAttachment servo) {
+                servo.notifyBackflow();
+            }
+        }
+    }
+
     private void updateRenderData() {
-        if (world.isClientSide) return;
-        
-        // Only update render data if we have items in transit
-        if (itemsInTransit.isEmpty()) return;
-        
-        // Only log periodically to avoid spam
-        if (world.getGameTime() % 20 == 0) {
-            System.out.println("ItemGrid: Updating render data for " + getNodes().size() + " nodes with " + itemsInTransit.size() + " items in transit");
+        if (world.isClientSide || itemsInTransit.isEmpty()) {
+            return;
         }
         
-        // Update all windowed duct entities with current item transit data
+        // Update only windowed duct entities with current item transit data
         for (ItemGridNode node : getNodes().values()) {
             try {
                 if (node.getDuct() instanceof cofh.thermal.dynamics.common.block.entity.duct.ItemDuctBlockEntity ductEntity) {
                     if (ductEntity.isWindowed() && ductEntity.hasLevel()) {
-                        ductEntity.update(); // Use the IGridHostUpdateable.update() method to trigger packet send
+                        ductEntity.update();
                     }
                 }
             } catch (Exception e) {
-                // Don't let render updates break the grid
-                System.out.println("ItemGrid: Error updating render data for node at " + node.getPos() + ": " + e.getMessage());
+                // Don't let render updates break the grid - silent failure
             }
         }
     }
 
     private void processItemsInTransit() {
-        if (!itemsInTransit.isEmpty()) {
-            System.out.println("ItemGrid: Processing " + itemsInTransit.size() + " items in transit");
-        }
-        
         Iterator<ItemInTransit> iterator = itemsInTransit.iterator();
         while (iterator.hasNext()) {
             ItemInTransit item = iterator.next();
-            
-            // Check for dynamic rerouting opportunity before moving the item
-            checkAndRerouteItem(item);
-            
+
+            // Note: Per-tick rerouting removed - path validation now handled by handleTopologyChange()
+            // This significantly improves performance by avoiding O(N) scans every tick
+
             // Update item position based on actual speed
             item.distanceTraveled += ITEM_SPEED;
             double totalDistance = item.getTotalDistance();
-            double progress = (item.distanceTraveled / totalDistance) * 100;
-            
-            System.out.println("ItemGrid: Item " + item.stack.getItem() + " progress: " + String.format("%.1f", progress) + "% (" + String.format("%.2f", item.distanceTraveled) + "/" + String.format("%.2f", totalDistance) + ")");
-            
+
             // Check if item reached destination
             if (item.distanceTraveled >= totalDistance) {
                 // Try to insert into destination
                 if (tryInsertItem(item)) {
-                    System.out.println("ItemFlow: Delivered " + item.stack.getCount() + "x " + item.stack.getItem() + " to " + item.destination);
                     // Successfully inserted - remove from transit tracking
                     removeItemFromTransitTracking(item);
                     iterator.remove();
                 } else {
-                    System.out.println("ItemFlow: Delivery failed, returning " + item.stack.getCount() + "x " + item.stack.getItem() + " to sender");
                     // Backup occurred - reverse path and add to returning queue
                     item.reverse();
                     // Reset distance traveled for return journey
@@ -243,24 +311,15 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     }
 
     public void insertItem(ItemStack stack, BlockPos origin, Direction originSide, BlockPos destination, Direction destinationSide, List<BlockPos> path) {
-        System.out.println("ItemGrid: insertItem called - " + stack.getCount() + "x " + stack.getItem() + " from " + origin + " to " + destination + " with path length " + path.size());
-        
         if (stack.isEmpty()) {
-            System.out.println("ItemGrid: Stack is empty, aborting insert");
             return;
         }
         
         ItemInTransit item = new ItemInTransit(stack.copy(), origin, originSide, destination, destinationSide, path);
         itemsInTransit.add(item);
         
-        double totalDistance = item.getTotalDistance();
-        int estimatedTicks = (int) Math.ceil(totalDistance / ITEM_SPEED);
-        System.out.println("ItemFlow: Started transit - " + stack.getCount() + "x " + stack.getItem() + " will travel " + String.format("%.1f", totalDistance) + " blocks over ~" + estimatedTicks + " ticks");
-        
         // Track this item as in transit to destination
         addItemToTransitTracking(item);
-        
-        System.out.println("ItemGrid: Item successfully added to transit queue. Current queue size: " + itemsInTransit.size());
     }
     
     private void addItemToTransitTracking(ItemInTransit item) {
@@ -433,140 +492,8 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         }
     }
     
-    /**
-     * Check if there's a better path available and reroute the item if needed
-     */
-    private void checkAndRerouteItem(ItemInTransit item) {
-        // Don't reroute returning items
-        if (item.returning) return;
-        
-        // Calculate current position of the item
-        double totalDistance = item.getTotalDistance();
-        double progressRatio = item.distanceTraveled / totalDistance;
-        
-        // Get the current actual position
-        BlockPos currentPos = calculateCurrentPosition(item, progressRatio);
-        
-        // Find the nearest node to the item's current position
-        ItemGridNode nearestNode = findNearestNode(currentPos);
-        if (nearestNode == null) return;
-        
-        // Try to find a better destination from the current position
-        ItemGridNode.DestinationResult betterDest = nearestNode.findBestDestination(item.stack);
-        
-        // If no better destination or it's the same as current, don't reroute
-        if (betterDest == null || betterDest.destination == null || betterDest.destination.equals(item.destination)) {
-            return;
-        }
-        
-        // Check if the new destination is actually closer from current position
-        List<BlockPos> newPath = betterDest.pathInfo.path;
-        if (newPath == null || newPath.isEmpty()) return;
-        
-        // Calculate distance from current position to new destination
-        double newDistance = calculatePathDistance(currentPos, betterDest.destination, newPath);
-        
-        // Calculate remaining distance on current path
-        double remainingDistance = totalDistance - item.distanceTraveled;
-        
-        // Only reroute if the new path is significantly shorter (at least 2 blocks shorter)
-        if (newDistance < remainingDistance - 2.0) {
-            System.out.println("ItemGrid: Rerouting item " + item.stack.getItem() + " from " + item.destination + " to " + betterDest.destination + " (saves " + String.format("%.1f", remainingDistance - newDistance) + " blocks)");
-            
-            // Update destination and path
-            item.destination = betterDest.destination;
-            item.destinationSide = betterDest.pathInfo.side; // Use the correct side from pathInfo
-            item.path = newPath;
-            item.distanceTraveled = 0; // Reset distance for new path
-            
-            // Update transit tracking
-            removeItemFromTransitTracking(item);
-            addItemToTransitTracking(item);
-        }
-    }
-    
-    /**
-     * Calculate the current position of an item based on its progress
-     */
-    private BlockPos calculateCurrentPosition(ItemInTransit item, double progressRatio) {
-        if (item.path.isEmpty()) {
-            // Direct path - interpolate between origin and destination
-            return item.origin;
-        }
-        
-        // Build full path including origin and destination
-        List<BlockPos> fullPath = new ArrayList<>();
-        fullPath.add(item.origin);
-        fullPath.addAll(item.path);
-        fullPath.add(item.destination);
-        
-        // Find which segment the item is on
-        double totalDist = item.getTotalDistance();
-        double targetDist = item.distanceTraveled;
-        double accumulatedDist = 0;
-        
-        for (int i = 0; i < fullPath.size() - 1; i++) {
-            BlockPos start = fullPath.get(i);
-            BlockPos end = fullPath.get(i + 1);
-            double segmentDist = Math.sqrt(start.distSqr(end));
-            
-            if (targetDist <= accumulatedDist + segmentDist) {
-                // Item is on this segment
-                return start; // Return the start of current segment
-            }
-            
-            accumulatedDist += segmentDist;
-        }
-        
-        return item.destination; // Fallback
-    }
-    
-    /**
-     * Find the nearest grid node to a position
-     */
-    private ItemGridNode findNearestNode(BlockPos pos) {
-        ItemGridNode nearest = null;
-        double minDistance = Double.MAX_VALUE;
-        
-        for (ItemGridNode node : getNodes().values()) {
-            double dist = Math.sqrt(node.getPos().distSqr(pos));
-            if (dist < minDistance) {
-                minDistance = dist;
-                nearest = node;
-            }
-        }
-        
-        return nearest;
-    }
-    
-    /**
-     * Calculate the distance of a path from a starting position
-     */
-    private double calculatePathDistance(BlockPos start, BlockPos end, List<BlockPos> path) {
-        if (path.isEmpty()) {
-            return Math.sqrt(start.distSqr(end));
-        }
-        
-        double distance = 0;
-        BlockPos current = start;
-        
-        // Distance to first path node
-        if (!path.isEmpty()) {
-            distance += Math.sqrt(current.distSqr(path.get(0)));
-            current = path.get(0);
-        }
-        
-        // Distance between path nodes
-        for (int i = 1; i < path.size(); i++) {
-            distance += Math.sqrt(current.distSqr(path.get(i)));
-            current = path.get(i);
-        }
-        
-        // Distance to destination
-        distance += Math.sqrt(current.distSqr(end));
-        
-        return distance;
-    }
+    // Note: Per-tick rerouting methods removed (checkAndRerouteItem, calculateCurrentPosition,
+    // findNearestNode, calculatePathDistance) - path validation now handled by handleTopologyChange()
 
     /**
      * Represents an item traveling through the duct network

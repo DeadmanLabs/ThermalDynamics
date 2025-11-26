@@ -120,6 +120,7 @@ repositories {
     maven { url 'https://dvs1.progwml6.com/files/maven/' }
     maven { url 'https://maven.blamejared.com/' }
     maven { url 'https://maven.theillusivec4.top/' }
+    maven { url 'https://api.modrinth.com/maven' } // Spark
 }
 
 dependencies {
@@ -130,6 +131,9 @@ dependencies {
 
     implementation fg.deobf("com.teamcofh:cofh_core:${mc_version}-${cofh_core_version}")
     implementation fg.deobf("com.teamcofh:thermal_core:${mc_version}-${thermal_core_version}")
+
+    // Spark profiler for dev environment
+    runtimeOnly fg.deobf("maven.modrinth:spark:1.10.53-forge")
 
 //    implementation fg.deobf("com.simibubi.create:create-${create_minecraft_version}:${create_version}:slim") { transitive = false }
 //    implementation fg.deobf("com.jozufozu.flywheel:flywheel-forge-${flywheel_minecraft_version}:${flywheel_version}")

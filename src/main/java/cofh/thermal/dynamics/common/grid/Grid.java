@@ -76,6 +76,12 @@ public abstract class Grid<G extends Grid<G, N>, N extends GridNode<G>> implemen
     protected final Level world;
     public boolean isLoaded;
 
+    /**
+     * Version counter that increments whenever the grid topology changes.
+     * Used for event-driven cache invalidation instead of time-based.
+     */
+    protected long topologyVersion = 0;
+
     protected Grid(IGridType<G> gridType, UUID id, Level world) {
 
         this.gridType = gridType;
@@ -464,9 +470,23 @@ public abstract class Grid<G extends Grid<G, N>, N extends GridNode<G>> implemen
      */
     public void onModified() {
 
+        // Increment topology version to invalidate route caches
+        topologyVersion++;
+
         if (DEBUG) {
             checkInvariant();
         }
+    }
+
+    /**
+     * Gets the current topology version.
+     * This version increments whenever the grid structure changes,
+     * allowing nodes to know when to invalidate their caches.
+     *
+     * @return The current topology version.
+     */
+    public long getTopologyVersion() {
+        return topologyVersion;
     }
 
     protected void updateHosts() {

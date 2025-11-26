@@ -35,6 +35,7 @@ import static cofh.lib.util.constants.NBTTags.TAG_TYPE;
 import static cofh.thermal.core.ThermalCore.ITEMS;
 import static cofh.thermal.dynamics.client.TDynTextures.SERVO_ATTACHMENT_ACTIVE_LOC;
 import static cofh.thermal.dynamics.client.TDynTextures.SERVO_ATTACHMENT_LOC;
+import static cofh.thermal.dynamics.client.TDynTextures.SERVO_ATTACHMENT_OVERFLOW_LOC;
 import static cofh.thermal.dynamics.init.registries.TDynIDs.ID_SERVO_ATTACHMENT;
 import static cofh.thermal.dynamics.init.registries.TDynIDs.SERVO;
 
@@ -60,6 +61,9 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
 
     // Overflow storage for items that couldn't be delivered
     protected ItemStackHandler overflowStorage = new ItemStackHandler(9); // 3x3 grid
+
+    // Flag indicating items are being backflowed to this servo
+    protected boolean hasBackflow = false;
 
     protected LazyOptional<IItemHandler> internalGridCap = LazyOptional.empty();
     protected LazyOptional<IItemHandler> gridCap = LazyOptional.empty();
@@ -151,62 +155,110 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     @Override
     public void tick() {
         if (!rsControl.getState()) {
-            System.out.println("ItemServo: Redstone control disabled at " + pos() + " side " + side());
             return;
         }
-        
+
+        // Try to reinject overflow items first (priority over new extractions)
+        if (isOverflowing()) {
+            tryReinjectOverflow();
+        }
+
         // Decrement extraction cooldown
         if (extractionCooldown > 0) {
             extractionCooldown--;
-            if (extractionCooldown == 0) {
-                System.out.println("ItemServo: Cooldown finished, ready to extract at " + pos() + " side " + side());
-            }
             return;
         }
-        
-        System.out.println("ItemServo: Attempting extraction at " + pos() + " side " + side());
-        
+
         // Extract items from connected inventory and route through grid
         extractAndRouteItems();
-        
+
         // Set cooldown for next extraction
         extractionCooldown = EXTRACTION_INTERVAL;
-        System.out.println("ItemServo: Set cooldown to " + EXTRACTION_INTERVAL + " ticks");
+    }
+
+    /**
+     * Try to reinject overflow items back into the grid when a valid path exists.
+     */
+    private void tryReinjectOverflow() {
+        try {
+            // Get grid for routing
+            if (!(duct.getGrid() instanceof cofh.thermal.dynamics.common.grid.item.ItemGrid itemGrid)) {
+                return;
+            }
+
+            // Get our grid node
+            cofh.thermal.dynamics.common.grid.item.ItemGridNode ourNode = itemGrid.getNodes().get(pos());
+            if (ourNode == null) {
+                return;
+            }
+
+            // Try to reinject items from overflow storage
+            for (int slot = 0; slot < overflowStorage.getSlots(); slot++) {
+                ItemStack stack = overflowStorage.getStackInSlot(slot);
+                if (stack.isEmpty()) {
+                    continue;
+                }
+
+                // Find a valid destination for this item
+                cofh.thermal.dynamics.common.grid.item.ItemGridNode.DestinationResult destination = ourNode.findBestDestination(stack);
+                if (destination == null) {
+                    continue; // No valid path yet - keep in overflow
+                }
+
+                BlockPos destPos = destination.destination;
+                cofh.thermal.dynamics.common.grid.item.ItemGridNode.PathInfo pathInfo = destination.pathInfo;
+
+                // Check if destination has capacity
+                int availableCapacity = itemGrid.getAvailableCapacity(destPos, pathInfo.side, stack);
+                if (availableCapacity <= 0) {
+                    continue;
+                }
+
+                // Extract only what can fit
+                int toExtract = Math.min(stack.getCount(), availableCapacity);
+                ItemStack extracted = overflowStorage.extractItem(slot, toExtract, false);
+
+                if (!extracted.isEmpty()) {
+                    // Route item through grid
+                    itemGrid.insertItem(extracted, pos(), side(), destPos, pathInfo.side, pathInfo.path);
+
+                    // Clear backflow flag if we successfully reinjected
+                    if (!isOverflowing()) {
+                        clearBackflow();
+                    }
+
+                    // Only process one item per tick to avoid flooding the network
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            // Silent failure for performance
+        }
     }
     
     private void extractAndRouteItems() {
         try {
-            System.out.println("ItemServo: extractAndRouteItems called at " + pos() + " side " + side());
-            
             // Get connected external inventory
             LazyOptional<IItemHandler> extCap = getExternalCapability();
             if (!extCap.isPresent()) {
-                System.out.println("ItemServo: No external capability at " + pos() + " side " + side());
                 return;
             }
             
             IItemHandler externalHandler = extCap.orElse(null);
             if (externalHandler == null) {
-                System.out.println("ItemServo: External handler is null at " + pos() + " side " + side());
                 return;
             }
             
             // Get grid for routing
             if (!(duct.getGrid() instanceof cofh.thermal.dynamics.common.grid.item.ItemGrid itemGrid)) {
-                System.out.println("ItemServo: Grid is not ItemGrid at " + pos() + " side " + side() + " - got " + (duct.getGrid() != null ? duct.getGrid().getClass().getSimpleName() : "null"));
                 return;
             }
             
             // Get our grid node
             cofh.thermal.dynamics.common.grid.item.ItemGridNode ourNode = itemGrid.getNodes().get(pos());
             if (ourNode == null) {
-                System.out.println("ItemServo: No grid node found at " + pos());
                 return;
             }
-            
-            System.out.println("ItemServo: Got ItemGrid and external handler, proceeding with extraction");
-            System.out.println("ItemServo: External handler has " + externalHandler.getSlots() + " slots");
-            System.out.println("ItemServo: Configured to extract " + amountTransfer + " items per operation");
             
             int remainingToExtract = amountTransfer;
             
@@ -218,36 +270,28 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
                         continue;
                     }
                     
-                    System.out.println("ItemServo: Checking slot " + slot + " with " + slotStack.getCount() + "x " + slotStack.getItem());
-                    
                     // Test extraction first
                     ItemStack extractable = externalHandler.extractItem(slot, Math.min(remainingToExtract, 64), true);
                     if (extractable.isEmpty()) {
-                        System.out.println("ItemServo: Cannot extract from slot " + slot);
                         continue;
                     }
                     
                     if (!filter.valid(extractable)) {
-                        System.out.println("ItemServo: Item " + extractable.getItem() + " failed filter check");
                         continue;
                     }
                     
                     // Find best destination for this item
                     cofh.thermal.dynamics.common.grid.item.ItemGridNode.DestinationResult destination = ourNode.findBestDestination(extractable);
                     if (destination == null) {
-                        System.out.println("ItemServo: No valid destination found for " + extractable.getItem());
                         continue;
                     }
                     
                     BlockPos destPos = destination.destination;
                     cofh.thermal.dynamics.common.grid.item.ItemGridNode.PathInfo pathInfo = destination.pathInfo;
                     
-                    System.out.println("ItemServo: Found destination " + destPos + " for " + extractable.getItem());
-                    
                     // Check if destination has capacity (including items in transit)
                     int availableCapacity = itemGrid.getAvailableCapacity(destPos, pathInfo.side, extractable);
                     if (availableCapacity <= 0) {
-                        System.out.println("ItemServo: No capacity available at destination " + destPos);
                         continue;
                     }
                     
@@ -256,29 +300,20 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
                     
                     ItemStack extracted = externalHandler.extractItem(slot, toExtract, false);
                     if (extracted.isEmpty()) {
-                        System.out.println("ItemServo: Actual extraction failed for slot " + slot);
                         continue;
                     }
-                    
-                    System.out.println("ItemServo: Successfully extracted " + extracted.getCount() + "x " + extracted.getItem() + " from " + pos() + " -> routing to " + destPos + " (remaining: " + (remainingToExtract - extracted.getCount()) + ")");
                     
                     // Route item through grid
                     itemGrid.insertItem(extracted, pos(), side(), destPos, pathInfo.side, pathInfo.path);
                     remainingToExtract -= extracted.getCount();
                     
-                    System.out.println("ItemServo: Inserted item into grid for transport");
-                    
                 } catch (Exception e) {
-                    System.out.println("ItemServo: Exception processing slot " + slot + ": " + e.getMessage());
-                    e.printStackTrace();
+                    // Silent failure for performance
                 }
             }
             
-            System.out.println("ItemServo: Extraction cycle completed");
-            
         } catch (Exception e) {
-            System.out.println("ItemServo: Exception during extraction: " + e.getMessage());
-            e.printStackTrace();
+            // Silent failure for performance
         }
     }
     
@@ -307,7 +342,7 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
                 return; // Successfully stored
             }
         }
-        
+
         // If storage is full, expand it by creating additional virtual storage
         // For simplicity, we'll just force it into the last slot (infinite storage)
         if (!stack.isEmpty()) {
@@ -324,6 +359,40 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
         }
     }
 
+    /**
+     * Called when items are being backflowed to this servo due to path breakage.
+     */
+    public void notifyBackflow() {
+        hasBackflow = true;
+    }
+
+    /**
+     * Check if this servo is overflowing (has items in overflow storage).
+     * Used for visual indication (red servo).
+     */
+    public boolean isOverflowing() {
+        for (int slot = 0; slot < overflowStorage.getSlots(); slot++) {
+            if (!overflowStorage.getStackInSlot(slot).isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if this servo has items being backflowed to it.
+     */
+    public boolean hasBackflow() {
+        return hasBackflow;
+    }
+
+    /**
+     * Clear the backflow flag (called when backflow is complete).
+     */
+    public void clearBackflow() {
+        hasBackflow = false;
+    }
+
     @Override
     public ItemStack getItem() {
         return new ItemStack(ITEMS.get(ID_SERVO_ATTACHMENT));
@@ -331,6 +400,10 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
 
     @Override
     public ResourceLocation getTexture() {
+        // Show overflow texture (red) when servo has overflow items
+        if (isOverflowing()) {
+            return SERVO_ATTACHMENT_OVERFLOW_LOC;
+        }
         return rsControl.getState() ? SERVO_ATTACHMENT_ACTIVE_LOC : SERVO_ATTACHMENT_LOC;
     }
 

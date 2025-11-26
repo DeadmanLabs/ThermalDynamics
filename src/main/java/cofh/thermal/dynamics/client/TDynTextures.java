@@ -24,6 +24,7 @@ public class TDynTextures {
 
     public static ResourceLocation SERVO_ATTACHMENT_ACTIVE_LOC = new ResourceLocation(ID_THERMAL + ":block/ducts/servo_attachment_active");
     public static ResourceLocation SERVO_ATTACHMENT_LOC = new ResourceLocation(ID_THERMAL + ":block/ducts/servo_attachment");
+    public static ResourceLocation SERVO_ATTACHMENT_OVERFLOW_LOC = new ResourceLocation(ID_THERMAL + ":block/ducts/servo_attachment_overflow");
 
     public static ResourceLocation TURBO_SERVO_ATTACHMENT_ACTIVE_LOC = new ResourceLocation(ID_THERMAL + ":block/ducts/turbo_servo_attachment_active");
     public static ResourceLocation TURBO_SERVO_ATTACHMENT_LOC = new ResourceLocation(ID_THERMAL + ":block/ducts/turbo_servo_attachment");

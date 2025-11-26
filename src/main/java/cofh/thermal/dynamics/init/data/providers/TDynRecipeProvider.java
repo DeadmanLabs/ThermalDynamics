@@ -114,6 +114,244 @@ public class TDynRecipeProvider extends RecipeProviderCoFH {
                 .pattern("IRI")
                 .unlockedBy("has_duct", has(ThermalTags.Items.DUCTS))
                 .save(consumer, ID_THERMAL + ":turbo_servo_attachment_2");
+
+        // region ITEM DUCT RECIPES
+        // Base Item Duct (windowed)
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT), 4)
+                .define('G', ThermalTags.Items.HARDENED_GLASS)
+                .define('T', ItemTagsCoFH.INGOTS_TIN)
+                .pattern("TGT")
+                .unlockedBy("has_tin", has(ItemTagsCoFH.INGOTS_TIN))
+                .save(consumer, ID_THERMAL + ":item_duct_4");
+
+        // Item Duct Opaque (from base item duct)
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_OPAQUE), 4)
+                .define('L', ItemTagsCoFH.INGOTS_LEAD)
+                .define('T', ItemTagsCoFH.INGOTS_TIN)
+                .pattern("TLT")
+                .unlockedBy("has_tin", has(ItemTagsCoFH.INGOTS_TIN))
+                .save(consumer, ID_THERMAL + ":item_duct_opaque_4");
+
+        // Dense Item Duct (from base)
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_DENSE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT))
+                .define('L', ItemTagsCoFH.INGOTS_LEAD)
+                .pattern(" L ")
+                .pattern("DDD")
+                .pattern(" L ")
+                .unlockedBy("has_item_duct", has(reg.get(ID_ITEM_DUCT)))
+                .save(consumer, ID_THERMAL + ":item_duct_dense_4");
+
+        // Dense Item Duct Opaque
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_DENSE_OPAQUE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_OPAQUE))
+                .define('L', ItemTagsCoFH.INGOTS_LEAD)
+                .pattern(" L ")
+                .pattern("DDD")
+                .pattern(" L ")
+                .unlockedBy("has_item_duct", has(reg.get(ID_ITEM_DUCT_OPAQUE)))
+                .save(consumer, ID_THERMAL + ":item_duct_dense_opaque_4");
+
+        // Vacuum Item Duct (from base)
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_VACUUM), 4)
+                .define('D', reg.get(ID_ITEM_DUCT))
+                .define('E', ItemTagsCoFH.INGOTS_ELECTRUM)
+                .pattern(" E ")
+                .pattern("DDD")
+                .pattern(" E ")
+                .unlockedBy("has_item_duct", has(reg.get(ID_ITEM_DUCT)))
+                .save(consumer, ID_THERMAL + ":item_duct_vacuum_4");
+
+        // Vacuum Item Duct Opaque
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_VACUUM_OPAQUE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_OPAQUE))
+                .define('E', ItemTagsCoFH.INGOTS_ELECTRUM)
+                .pattern(" E ")
+                .pattern("DDD")
+                .pattern(" E ")
+                .unlockedBy("has_item_duct", has(reg.get(ID_ITEM_DUCT_OPAQUE)))
+                .save(consumer, ID_THERMAL + ":item_duct_vacuum_opaque_4");
+
+        // Impulse Item Duct (from base)
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_IMPULSE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT))
+                .define('G', Tags.Items.DUSTS_GLOWSTONE)
+                .pattern(" G ")
+                .pattern("DDD")
+                .pattern(" G ")
+                .unlockedBy("has_item_duct", has(reg.get(ID_ITEM_DUCT)))
+                .save(consumer, ID_THERMAL + ":item_duct_impulse_4");
+
+        // Impulse Item Duct Opaque
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_IMPULSE_OPAQUE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_OPAQUE))
+                .define('G', Tags.Items.DUSTS_GLOWSTONE)
+                .pattern(" G ")
+                .pattern("DDD")
+                .pattern(" G ")
+                .unlockedBy("has_item_duct", has(reg.get(ID_ITEM_DUCT_OPAQUE)))
+                .save(consumer, ID_THERMAL + ":item_duct_impulse_opaque_4");
+
+        // Impulse Dense Item Duct
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_IMPULSE_DENSE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_DENSE))
+                .define('G', Tags.Items.DUSTS_GLOWSTONE)
+                .pattern(" G ")
+                .pattern("DDD")
+                .pattern(" G ")
+                .unlockedBy("has_item_duct_dense", has(reg.get(ID_ITEM_DUCT_DENSE)))
+                .save(consumer, ID_THERMAL + ":item_duct_impulse_dense_4");
+
+        // Impulse Dense Item Duct Opaque
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_IMPULSE_DENSE_OPAQUE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_DENSE_OPAQUE))
+                .define('G', Tags.Items.DUSTS_GLOWSTONE)
+                .pattern(" G ")
+                .pattern("DDD")
+                .pattern(" G ")
+                .unlockedBy("has_item_duct_dense", has(reg.get(ID_ITEM_DUCT_DENSE_OPAQUE)))
+                .save(consumer, ID_THERMAL + ":item_duct_impulse_dense_opaque_4");
+
+        // Impulse Vacuum Item Duct
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_IMPULSE_VACUUM), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_VACUUM))
+                .define('G', Tags.Items.DUSTS_GLOWSTONE)
+                .pattern(" G ")
+                .pattern("DDD")
+                .pattern(" G ")
+                .unlockedBy("has_item_duct_vacuum", has(reg.get(ID_ITEM_DUCT_VACUUM)))
+                .save(consumer, ID_THERMAL + ":item_duct_impulse_vacuum_4");
+
+        // Impulse Vacuum Item Duct Opaque
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_IMPULSE_VACUUM_OPAQUE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_VACUUM_OPAQUE))
+                .define('G', Tags.Items.DUSTS_GLOWSTONE)
+                .pattern(" G ")
+                .pattern("DDD")
+                .pattern(" G ")
+                .unlockedBy("has_item_duct_vacuum", has(reg.get(ID_ITEM_DUCT_VACUUM_OPAQUE)))
+                .save(consumer, ID_THERMAL + ":item_duct_impulse_vacuum_opaque_4");
+
+        // Signalum Item Duct (from base)
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_SIGNALUM), 4)
+                .define('D', reg.get(ID_ITEM_DUCT))
+                .define('S', ItemTagsCoFH.INGOTS_SIGNALUM)
+                .pattern(" S ")
+                .pattern("DDD")
+                .pattern(" S ")
+                .unlockedBy("has_item_duct", has(reg.get(ID_ITEM_DUCT)))
+                .save(consumer, ID_THERMAL + ":item_duct_signalum_4");
+
+        // Signalum Item Duct Opaque
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_SIGNALUM_OPAQUE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_OPAQUE))
+                .define('S', ItemTagsCoFH.INGOTS_SIGNALUM)
+                .pattern(" S ")
+                .pattern("DDD")
+                .pattern(" S ")
+                .unlockedBy("has_item_duct", has(reg.get(ID_ITEM_DUCT_OPAQUE)))
+                .save(consumer, ID_THERMAL + ":item_duct_signalum_opaque_4");
+
+        // Signalum Dense Item Duct
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_SIGNALUM_DENSE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_DENSE))
+                .define('S', ItemTagsCoFH.INGOTS_SIGNALUM)
+                .pattern(" S ")
+                .pattern("DDD")
+                .pattern(" S ")
+                .unlockedBy("has_item_duct_dense", has(reg.get(ID_ITEM_DUCT_DENSE)))
+                .save(consumer, ID_THERMAL + ":item_duct_signalum_dense_4");
+
+        // Signalum Dense Item Duct Opaque
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_SIGNALUM_DENSE_OPAQUE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_DENSE_OPAQUE))
+                .define('S', ItemTagsCoFH.INGOTS_SIGNALUM)
+                .pattern(" S ")
+                .pattern("DDD")
+                .pattern(" S ")
+                .unlockedBy("has_item_duct_dense", has(reg.get(ID_ITEM_DUCT_DENSE_OPAQUE)))
+                .save(consumer, ID_THERMAL + ":item_duct_signalum_dense_opaque_4");
+
+        // Signalum Vacuum Item Duct
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_SIGNALUM_VACUUM), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_VACUUM))
+                .define('S', ItemTagsCoFH.INGOTS_SIGNALUM)
+                .pattern(" S ")
+                .pattern("DDD")
+                .pattern(" S ")
+                .unlockedBy("has_item_duct_vacuum", has(reg.get(ID_ITEM_DUCT_VACUUM)))
+                .save(consumer, ID_THERMAL + ":item_duct_signalum_vacuum_4");
+
+        // Signalum Vacuum Item Duct Opaque
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_SIGNALUM_VACUUM_OPAQUE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_VACUUM_OPAQUE))
+                .define('S', ItemTagsCoFH.INGOTS_SIGNALUM)
+                .pattern(" S ")
+                .pattern("DDD")
+                .pattern(" S ")
+                .unlockedBy("has_item_duct_vacuum", has(reg.get(ID_ITEM_DUCT_VACUUM_OPAQUE)))
+                .save(consumer, ID_THERMAL + ":item_duct_signalum_vacuum_opaque_4");
+
+        // Signalum Impulse Item Duct
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_IMPULSE))
+                .define('S', ItemTagsCoFH.INGOTS_SIGNALUM)
+                .pattern(" S ")
+                .pattern("DDD")
+                .pattern(" S ")
+                .unlockedBy("has_item_duct_impulse", has(reg.get(ID_ITEM_DUCT_IMPULSE)))
+                .save(consumer, ID_THERMAL + ":item_duct_signalum_impulse_4");
+
+        // Signalum Impulse Item Duct Opaque
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_OPAQUE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_IMPULSE_OPAQUE))
+                .define('S', ItemTagsCoFH.INGOTS_SIGNALUM)
+                .pattern(" S ")
+                .pattern("DDD")
+                .pattern(" S ")
+                .unlockedBy("has_item_duct_impulse", has(reg.get(ID_ITEM_DUCT_IMPULSE_OPAQUE)))
+                .save(consumer, ID_THERMAL + ":item_duct_signalum_impulse_opaque_4");
+
+        // Signalum Impulse Dense Item Duct
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_IMPULSE_DENSE))
+                .define('S', ItemTagsCoFH.INGOTS_SIGNALUM)
+                .pattern(" S ")
+                .pattern("DDD")
+                .pattern(" S ")
+                .unlockedBy("has_item_duct_impulse_dense", has(reg.get(ID_ITEM_DUCT_IMPULSE_DENSE)))
+                .save(consumer, ID_THERMAL + ":item_duct_signalum_impulse_dense_4");
+
+        // Signalum Impulse Dense Item Duct Opaque
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE_OPAQUE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_IMPULSE_DENSE_OPAQUE))
+                .define('S', ItemTagsCoFH.INGOTS_SIGNALUM)
+                .pattern(" S ")
+                .pattern("DDD")
+                .pattern(" S ")
+                .unlockedBy("has_item_duct_impulse_dense", has(reg.get(ID_ITEM_DUCT_IMPULSE_DENSE_OPAQUE)))
+                .save(consumer, ID_THERMAL + ":item_duct_signalum_impulse_dense_opaque_4");
+
+        // Signalum Impulse Vacuum Item Duct
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_IMPULSE_VACUUM))
+                .define('S', ItemTagsCoFH.INGOTS_SIGNALUM)
+                .pattern(" S ")
+                .pattern("DDD")
+                .pattern(" S ")
+                .unlockedBy("has_item_duct_impulse_vacuum", has(reg.get(ID_ITEM_DUCT_IMPULSE_VACUUM)))
+                .save(consumer, ID_THERMAL + ":item_duct_signalum_impulse_vacuum_4");
+
+        // Signalum Impulse Vacuum Item Duct Opaque
+        ShapedRecipeBuilder.shaped(BUILDING_BLOCKS, reg.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM_OPAQUE), 4)
+                .define('D', reg.get(ID_ITEM_DUCT_IMPULSE_VACUUM_OPAQUE))
+                .define('S', ItemTagsCoFH.INGOTS_SIGNALUM)
+                .pattern(" S ")
+                .pattern("DDD")
+                .pattern(" S ")
+                .unlockedBy("has_item_duct_impulse_vacuum", has(reg.get(ID_ITEM_DUCT_IMPULSE_VACUUM_OPAQUE)))
+                .save(consumer, ID_THERMAL + ":item_duct_signalum_impulse_vacuum_opaque_4");
+        // endregion
     }
 
 }

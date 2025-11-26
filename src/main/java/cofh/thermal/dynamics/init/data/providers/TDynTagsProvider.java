@@ -34,11 +34,63 @@ public class TDynTagsProvider {
             tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_FLUID_DUCT));
             tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_FLUID_DUCT_WINDOWED));
 
+            // Item Duct Variants - Mineable with pickaxe
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_OPAQUE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_DENSE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_DENSE_OPAQUE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_VACUUM));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_VACUUM_OPAQUE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_IMPULSE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_IMPULSE_OPAQUE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_IMPULSE_DENSE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_IMPULSE_DENSE_OPAQUE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_IMPULSE_VACUUM));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_IMPULSE_VACUUM_OPAQUE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_OPAQUE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_DENSE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_DENSE_OPAQUE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_VACUUM));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_VACUUM_OPAQUE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_OPAQUE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE_OPAQUE));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM));
+            tag(BlockTags.MINEABLE_WITH_PICKAXE).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM_OPAQUE));
+
             tag(BlockTags.MINEABLE_WITH_AXE).add(BLOCKS.get(ID_ITEM_BUFFER));
 
             tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ENERGY_DUCT));
             tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_FLUID_DUCT));
             tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_FLUID_DUCT_WINDOWED));
+
+            // Item Duct Variants - Ducts tag
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_OPAQUE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_DENSE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_DENSE_OPAQUE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_VACUUM));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_VACUUM_OPAQUE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_IMPULSE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_IMPULSE_OPAQUE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_IMPULSE_DENSE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_IMPULSE_DENSE_OPAQUE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_IMPULSE_VACUUM));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_IMPULSE_VACUUM_OPAQUE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_OPAQUE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_DENSE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_DENSE_OPAQUE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_VACUUM));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_VACUUM_OPAQUE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_OPAQUE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE_OPAQUE));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM));
+            tag(ThermalTags.Blocks.DUCTS).add(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM_OPAQUE));
             // endregion
         }
 

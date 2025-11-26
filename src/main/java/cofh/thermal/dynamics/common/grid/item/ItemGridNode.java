@@ -27,12 +27,16 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
 
     // Cache of connected item handlers
     private final Map<Direction, LazyOptional<IItemHandler>> connectedHandlers = new EnumMap<>(Direction.class);
-    
+
     // Cache of valid destinations in the network
     private Map<BlockPos, PathInfo> destinationCache = new HashMap<>();
-    private long lastCacheUpdate = 0;
-    private static final long CACHE_DURATION = 100; // Update cache every 5 seconds (100 ticks)
-    
+
+    /**
+     * Topology version when cache was last updated.
+     * Cache is invalidated when grid.getTopologyVersion() != cachedTopologyVersion.
+     */
+    private long cachedTopologyVersion = -1;
+
     private boolean connectionsCached = false;
 
     public void clearItemConnections() {
@@ -62,41 +66,34 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
         if (duct == null) {
             return;
         }
-        
-        boolean hasAttachments = false;
+
         for (Direction dir : Direction.values()) {
             var attachment = duct.getAttachment(dir);
             if (attachment != null && !(attachment instanceof cofh.thermal.dynamics.common.attachment.EmptyAttachment)) {
-                hasAttachments = true;
-                System.out.println("ItemGridNode: Ticking attachment " + attachment.getClass().getSimpleName() + " at " + pos + " direction " + dir);
                 attachment.tick();
             }
-        }
-        
-        if (hasAttachments && grid.getLevel().getGameTime() % 20 == 0) {
-            System.out.println("ItemGridNode: Ticked attachments at " + pos + " (tick " + grid.getLevel().getGameTime() + ")");
         }
     }
     
     @Override
     public void distributionTick() {
         if (!isLoaded()) return;
-        
+
         // Tick attachments first
         attachmentTick();
-        
+
         // Cache connections if needed
         if (!connectionsCached) {
             cacheConnections();
         }
-        
-        // Update destination cache periodically
-        long currentTick = grid.getLevel().getGameTime();
-        if (currentTick - lastCacheUpdate > CACHE_DURATION) {
+
+        // Update destination cache only when topology changes (event-driven, not time-based)
+        long currentTopologyVersion = grid.getTopologyVersion();
+        if (cachedTopologyVersion != currentTopologyVersion) {
             updateDestinationCache();
-            lastCacheUpdate = currentTick;
+            cachedTopologyVersion = currentTopologyVersion;
         }
-        
+
         // Check for connected item handlers that might need servicing
         for (Direction dir : Direction.values()) {
             updateConnectedHandler(dir);
@@ -144,7 +141,6 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
                         pathThroughDucts.add(current.pos);
                     }
                     destinationCache.put(neighborPos, new PathInfo(pathThroughDucts, dir.getOpposite()));
-                    System.out.println("ItemFlow: Found destination " + neighborPos + " (" + tile.getClass().getSimpleName() + ") via duct path length " + pathThroughDucts.size() + " from " + pos + " through " + current.pos);
                 }
             }
             
@@ -162,10 +158,6 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
             }
         }
         
-        // Only log if we found destinations and it's not a frequent update
-        if (destinationCache.size() > 0 && grid.getLevel().getGameTime() % 100 == 0) {
-            System.out.println("ItemFlow: Node at " + pos + " found " + destinationCache.size() + " destinations");
-        }
     }
 
     public boolean canExtractItem(Direction from) {
@@ -215,45 +207,36 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
 
     public DestinationResult findBestDestination(ItemStack stack) {
         // Sort destinations by path length to prioritize shortest paths
-        System.out.println("ItemFlow: Finding destination for " + stack.getItem() + " from node " + pos + " - checking " + destinationCache.size() + " cached destinations");
-        
-        // Convert to list and sort by path length (shortest first)
         List<Map.Entry<BlockPos, PathInfo>> sortedDestinations = new ArrayList<>(destinationCache.entrySet());
         sortedDestinations.sort(Comparator.comparingInt(entry -> entry.getValue().path.size()));
-        
+
         for (Map.Entry<BlockPos, PathInfo> entry : sortedDestinations) {
             BlockPos destPos = entry.getKey();
             PathInfo pathInfo = entry.getValue();
-            
-            System.out.println("ItemFlow: Evaluating destination " + destPos + " with path length " + pathInfo.path.size() + " (sorted by shortest path first)");
-            
+
             BlockEntity tile = grid.getLevel().getBlockEntity(destPos);
             if (tile == null) {
-                System.out.println("ItemFlow: Destination " + destPos + " - no tile entity");
                 continue;
             }
-            
+
             LazyOptional<IItemHandler> cap = tile.getCapability(ForgeCapabilities.ITEM_HANDLER, pathInfo.side);
             if (!cap.isPresent()) {
-                System.out.println("ItemFlow: Destination " + destPos + " - no item handler capability");
                 continue;
             }
-            
+
             IItemHandler handler = cap.orElse(null);
             if (handler == null) {
-                System.out.println("ItemFlow: Destination " + destPos + " - null handler");
                 continue;
             }
-            
+
             if (!canInsertItem(handler, stack)) {
-                System.out.println("ItemFlow: Destination " + destPos + " - cannot insert item");
                 continue;
             }
-            
+
             // Check if this destination has a servo that would extract from it
             // This prevents items from being routed to chests that servos are already extracting from
             boolean hasConflictingServo = false;
-            
+
             // Determine the duct position that connects to this destination
             BlockPos connectingDuctPos;
             if (pathInfo.path.size() > 0) {
@@ -263,9 +246,9 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
                 // Direct connection - this node connects directly to destination
                 connectingDuctPos = pos;
             }
-            
+
             ItemGridNode connectingDuctNode = grid.getNodes().get(connectingDuctPos);
-            
+
             try {
                 if (connectingDuctNode != null && connectingDuctNode.getDuct() != null) {
                     // Get the direction from the connecting duct to the destination
@@ -277,27 +260,24 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
                             break;
                         }
                     }
-                    
+
                     if (dirToDestination != null) {
                         var attachment = connectingDuctNode.getDuct().getAttachment(dirToDestination);
                         if (attachment instanceof cofh.thermal.dynamics.common.attachment.ItemServoAttachment) {
                             hasConflictingServo = true;
-                            System.out.println("ItemFlow: Skipping destination " + destPos + " - has conflicting servo on duct " + connectingDuctPos + " direction " + dirToDestination);
                         }
                     }
                 }
             } catch (Exception e) {
                 // If there's any error, allow the destination
-                System.out.println("ItemFlow: Error checking servo conflict for " + destPos + ": " + e.getMessage());
                 hasConflictingServo = false;
             }
-            
+
             if (!hasConflictingServo) {
-                System.out.println("ItemFlow: Selected shortest path destination - routing " + stack.getItem() + " to " + destPos + " via path length " + pathInfo.path.size());
                 return new DestinationResult(destPos, pathInfo);
             }
         }
-        
+
         return null;
     }
 

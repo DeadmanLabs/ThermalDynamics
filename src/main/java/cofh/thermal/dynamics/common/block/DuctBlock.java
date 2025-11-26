@@ -264,8 +264,8 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
 
     @Override
     public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
-
-        ModelUpdatePacket.sendToClient(level, pos);
+        // Tick method - model updates should only be sent when actually needed, not every tick
+        // ModelUpdatePackets are sent via onAttachmentUpdate() when changes actually occur
     }
 
     @Override

@@ -3,11 +3,13 @@ package cofh.thermal.dynamics.client.renderer;
 import cofh.thermal.dynamics.common.block.ItemDuctBlock;
 import cofh.thermal.dynamics.common.block.entity.duct.ItemDuctBlockEntity;
 import cofh.thermal.dynamics.common.grid.item.ItemGrid;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.ItemRenderer;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
@@ -19,6 +21,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import java.util.*;
@@ -48,6 +51,25 @@ public class ItemTransportRenderer {
 
     public static void register() {
         MinecraftForge.EVENT_BUS.addListener(ItemTransportRenderer::renderItemsInTransit);
+        MinecraftForge.EVENT_BUS.addListener(ItemTransportRenderer::onWorldUnload);
+    }
+
+    /**
+     * Clear all caches when a world unloads to prevent stale data
+     */
+    private static void onWorldUnload(LevelEvent.Unload event) {
+        if (event.getLevel().isClientSide()) {
+            clearCache();
+        }
+    }
+
+    /**
+     * Clear all render caches - called on world unload
+     */
+    public static void clearCache() {
+        windowedDuctCache.clear();
+        dirtyDucts.clear();
+        cachedRenderData.clear();
     }
     
     /**
@@ -92,14 +114,25 @@ public class ItemTransportRenderer {
         float partialTick = event.getPartialTick();
 
         poseStack.pushPose();
-        
+
+        // FIX: Reset render state before custom rendering to fix orange tinting
+        // Previous render passes may have left color/blend state in non-default values
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.enableDepthTest();
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+
         // Update cache every frame for smooth movement
         updateRenderCache(level, cameraPos);
-        
+
         // Render from cached data
         renderFromCache(poseStack, buffer, cameraPos, partialTick);
 
         buffer.endBatch();
+
+        // FIX: Restore render state after custom rendering
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+
         poseStack.popPose();
     }
 
@@ -195,7 +228,7 @@ public class ItemTransportRenderer {
         
         try {
             BakedModel model = itemRenderer.getModel(transitData.stack, null, null, 0);
-            itemRenderer.render(transitData.stack, ItemDisplayContext.GROUND, false, poseStack, bufferSource, lightLevel, 0, model);
+            itemRenderer.render(transitData.stack, ItemDisplayContext.GROUND, false, poseStack, bufferSource, lightLevel, OverlayTexture.NO_OVERLAY, model);
         } catch (Exception e) {
             // Silent failure - don't spam console
         }
@@ -260,7 +293,7 @@ public class ItemTransportRenderer {
 
         try {
             BakedModel model = itemRenderer.getModel(transitData.stack, null, null, 0);
-            itemRenderer.render(transitData.stack, ItemDisplayContext.GROUND, false, poseStack, bufferSource, lightLevel, 0, model);
+            itemRenderer.render(transitData.stack, ItemDisplayContext.GROUND, false, poseStack, bufferSource, lightLevel, OverlayTexture.NO_OVERLAY, model);
         } catch (Exception e) {
             // Silent failure - don't spam console
         }

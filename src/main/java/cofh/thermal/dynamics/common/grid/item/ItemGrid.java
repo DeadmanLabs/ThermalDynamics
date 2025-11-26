@@ -38,6 +38,9 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     // Speed in blocks per tick (0.05 = 1 block per second at 20 TPS for better visibility)
     private static final float ITEM_SPEED = 0.05f;
 
+    // Epsilon for float comparison to handle precision issues after deserialization
+    private static final float DISTANCE_EPSILON = 0.001f;
+
     // Queue for items in transit - using concurrent queue for thread safety
     private final Queue<ItemInTransit> itemsInTransit = new ConcurrentLinkedQueue<>();
 
@@ -212,8 +215,8 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             item.distanceTraveled += ITEM_SPEED;
             double totalDistance = item.getTotalDistance();
 
-            // Check if item reached destination
-            if (item.distanceTraveled >= totalDistance) {
+            // Check if item reached destination (use epsilon for float precision tolerance)
+            if (item.distanceTraveled >= totalDistance - DISTANCE_EPSILON) {
                 // Try to insert into destination
                 if (tryInsertItem(item)) {
                     // Successfully inserted - remove from transit tracking
@@ -242,8 +245,8 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             // Update item position
             item.distanceTraveled += ITEM_SPEED;
             
-            // Check if item reached origin
-            if (item.distanceTraveled >= totalDistance) {
+            // Check if item reached origin (use epsilon for float precision tolerance)
+            if (item.distanceTraveled >= totalDistance - DISTANCE_EPSILON) {
                 // Store in original servo's overflow (infinite storage)
                 handleReturnedItem(item);
                 iterator.remove();
@@ -462,7 +465,7 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             returningList.add(item.serializeNBT());
         }
         tag.put("returningItems", returningList);
-        
+
         return tag;
     }
 
@@ -490,6 +493,11 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             item.deserializeNBT(returningList.getCompound(i));
             returningItems.add(item);
         }
+
+        // After deserialization, sync lastCheckedTopologyVersion with the current topology
+        // to prevent immediate path validation (which would reverse items incorrectly
+        // since destinations may not be loaded yet)
+        lastCheckedTopologyVersion = getTopologyVersion();
     }
     
     // Note: Per-tick rerouting methods removed (checkAndRerouteItem, calculateCurrentPosition,

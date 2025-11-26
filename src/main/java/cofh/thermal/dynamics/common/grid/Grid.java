@@ -170,6 +170,7 @@ public abstract class Grid<G extends Grid<G, N>, N extends GridNode<G>> implemen
         for (N node : nodes) {
             node.setLoaded(true);
         }
+
         boolean wasLoaded = !isLoaded;
         isLoaded = true;
         return wasLoaded;

@@ -271,7 +271,6 @@ public class ItemTransportRenderer {
 
         poseStack.translate(0, bobbing, 0);
         poseStack.mulPose(Axis.YP.rotationDegrees(totalRotation));
-        poseStack.scale(0.45f, 0.45f, 0.45f); // Slightly larger (was 0.35f)
 
         // Calculate light level based on item position (like item on floor)
         Level level = Minecraft.getInstance().level;
@@ -287,6 +286,18 @@ public class ItemTransportRenderer {
 
         try {
             BakedModel model = itemRenderer.getModel(transitData.stack, null, null, 0);
+
+            // Use different scales for block items vs flat items
+            // Block items (isGui3d) need to be larger to look proportional in the duct
+            float scale = model.isGui3d() ? 0.65f : 0.45f;
+
+            // Center the item vertically - items render with origin at bottom, so offset down by quarter height
+            // Block items are ~1 unit tall, flat items are ~0.5 units tall (in GROUND context)
+            float yOffset = model.isGui3d() ? -0.25f * scale : -0.125f * scale;
+            poseStack.translate(0, yOffset, 0);
+
+            poseStack.scale(scale, scale, scale);
+
             itemRenderer.render(transitData.stack, ItemDisplayContext.GROUND, false, poseStack, bufferSource, lightLevel, OverlayTexture.NO_OVERLAY, model);
         } catch (Exception e) {
             // Silent failure - don't spam console

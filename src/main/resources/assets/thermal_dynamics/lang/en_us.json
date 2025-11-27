@@ -7,6 +7,9 @@
   "attachment.thermal.filter": "Fluiduct Filter",
   "attachment.thermal.servo": "Fluiduct Servo",
   "attachment.thermal.turbo_servo": "Fluiduct Turbo-Servo",
+  "attachment.thermal.item_filter": "Itemduct Filter",
+  "attachment.thermal.item_servo": "Itemduct Servo",
+  "attachment.thermal.item_turbo_servo": "Itemduct Turbo-Servo",
 
   "block.thermal.energy_duct": "Fluxduct",
   "block.thermal.fluid_duct": "Fluiduct",

@@ -34,7 +34,7 @@ import static cofh.thermal.dynamics.init.registries.TDynIDs.ID_FILTER_ATTACHMENT
 
 public class ItemFilterAttachment implements IFilterableAttachment, IRedstoneControllableAttachment, IConveyableData, MenuProvider {
 
-    public static final Component DISPLAY_NAME = Component.translatable("attachment.thermal.filter");
+    public static final Component DISPLAY_NAME = Component.translatable("attachment.thermal.item_filter");
 
     protected final IDuct<?, ?> duct;
     protected final Direction side;

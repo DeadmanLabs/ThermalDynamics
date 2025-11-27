@@ -1,7 +1,9 @@
 package cofh.thermal.dynamics.common.grid.item;
 
+import cofh.core.util.filter.IFilter;
 import cofh.thermal.dynamics.api.grid.IDuct;
 import cofh.thermal.dynamics.api.grid.ITickableGridNode;
+import cofh.thermal.dynamics.common.attachment.IFilterableAttachment;
 import cofh.thermal.dynamics.common.grid.GridNode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -265,6 +267,14 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
                         var attachment = connectingDuctNode.getDuct().getAttachment(dirToDestination);
                         if (attachment instanceof cofh.thermal.dynamics.common.attachment.ItemServoAttachment) {
                             hasConflictingServo = true;
+                        }
+                        // Check if attachment is a filter that would reject this item
+                        if (attachment instanceof IFilterableAttachment filterAttachment) {
+                            IFilter filter = filterAttachment.getFilter();
+                            if (filter != null && !filter.valid(stack)) {
+                                // Item doesn't match filter - skip this destination
+                                continue;
+                            }
                         }
                     }
                 }

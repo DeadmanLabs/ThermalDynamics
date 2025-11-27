@@ -16,7 +16,7 @@ import static cofh.thermal.dynamics.init.registries.TDynIDs.ID_TURBO_SERVO_ATTAC
 
 public class ItemTurboServoAttachment extends ItemServoAttachment {
 
-    public static final Component DISPLAY_NAME = Component.translatable("attachment.thermal.turbo_servo");
+    public static final Component DISPLAY_NAME = Component.translatable("attachment.thermal.item_turbo_servo");
 
     public static final int DEFAULT_TRANSFER = 1; // Default items per operation
     public static final int MIN_TRANSFER = 1; // Minimum items per operation  

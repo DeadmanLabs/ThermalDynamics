@@ -41,7 +41,7 @@ import static cofh.thermal.dynamics.init.registries.TDynIDs.SERVO;
 
 public class ItemServoAttachment implements IFilterableAttachment, IRedstoneControllableAttachment, IConveyableData, MenuProvider {
 
-    public static final Component DISPLAY_NAME = Component.translatable("attachment.thermal.servo");
+    public static final Component DISPLAY_NAME = Component.translatable("attachment.thermal.item_servo");
 
     public static final int DEFAULT_TRANSFER = 1; // Default items per operation  
     public static final int MIN_TRANSFER = 1; // Minimum items per operation

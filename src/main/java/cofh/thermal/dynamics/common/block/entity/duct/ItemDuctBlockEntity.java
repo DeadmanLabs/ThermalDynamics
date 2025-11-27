@@ -75,13 +75,7 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
             return false;
         }
         
-        boolean hasCapability = tile.getCapability(ForgeCapabilities.ITEM_HANDLER, dir.getOpposite()).isPresent();
-        
-        LOGGER.debug("ItemDuct at {} checking connection to block at {} (direction: {}): tile={}, hasItemCapability={}",
-                getBlockPos(), getBlockPos().relative(dir), dir, 
-                tile != null ? tile.getClass().getSimpleName() : "null", hasCapability);
-        
-        return hasCapability;
+        return tile.getCapability(ForgeCapabilities.ITEM_HANDLER, dir.getOpposite()).isPresent();
     }
 
     @Override
@@ -115,21 +109,36 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
             return;
         }
 
+        ItemGrid grid = getGrid();
+
+        // If grid is null/lost, clear render items to prevent frozen ghost items
+        if (grid == null) {
+            if (!renderItemsInTransit.isEmpty()) {
+                renderItemsInTransit = new ArrayList<>();
+            }
+            return;
+        }
+
         // Collect items in transit that should be rendered in this duct
         List<ItemTransitData> newRenderItems = new ArrayList<>();
 
-        ItemGrid grid = getGrid();
+        // Include forward-traveling items
+        Collection<ItemGrid.ItemInTransit> itemsInTransit = grid.getItemsInTransit();
+        for (ItemGrid.ItemInTransit item : itemsInTransit) {
+            // Calculate render data with velocity and progress for smooth interpolation
+            ItemTransitData renderData = calculateItemRenderDataForDuct(item);
+            if (renderData != null) {
+                newRenderItems.add(renderData);
+            }
+        }
 
-        if (grid != null) {
-            Collection<ItemGrid.ItemInTransit> itemsInTransit = grid.getItemsInTransit();
-
-            for (ItemGrid.ItemInTransit item : itemsInTransit) {
-                // Calculate render data with velocity and progress for smooth interpolation
-                ItemTransitData renderData = calculateItemRenderDataForDuct(item);
-
-                if (renderData != null) {
-                    newRenderItems.add(renderData);
-                }
+        // Include returning (backflowing) items - they need to be rendered too!
+        Collection<ItemGrid.ItemInTransit> returningItems = grid.getReturningItems();
+        for (ItemGrid.ItemInTransit item : returningItems) {
+            // Calculate render data for returning items (they travel in reverse)
+            ItemTransitData renderData = calculateItemRenderDataForDuct(item);
+            if (renderData != null) {
+                newRenderItems.add(renderData);
             }
         }
 
@@ -236,22 +245,39 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
     }
     
     /**
-     * Check if this duct should render the item - simplified approach
+     * Check if this duct should render the item.
+     * Uses the item's calculated position to determine if it's within this duct's bounds.
      */
     private boolean isDuctOnItemPath(ItemGrid.ItemInTransit item) {
-        // Check if this duct is anywhere in the item's path
+        // First check explicit positions (origin, destination, path)
         boolean isOrigin = worldPosition.equals(item.origin);
         boolean isDestination = worldPosition.equals(item.destination);
-        boolean isInPath = false;
+        if (isOrigin || isDestination) {
+            return true;
+        }
 
         for (BlockPos pathPos : item.path) {
             if (worldPosition.equals(pathPos)) {
-                isInPath = true;
-                break;
+                return true;
             }
         }
 
-        return isOrigin || isDestination || isInPath;
+        // If not explicitly in path, check if item's calculated position is within this duct
+        // This handles cases where the path has been filtered (e.g., during backflow)
+        // and the item is traveling through ducts that aren't explicit nodes in the path
+        Vec3 itemPos = calculateItemPosition(item);
+        BlockPos itemBlockPos = BlockPos.containing(itemPos);
+
+        // Check if item is in this duct or an adjacent block (for items on boundaries)
+        if (worldPosition.equals(itemBlockPos)) {
+            return true;
+        }
+
+        // Also check if the item is within 0.5 blocks of this duct's center
+        // This ensures we render items that are crossing between ducts
+        Vec3 ductCenter = Vec3.atCenterOf(worldPosition);
+        double distSq = itemPos.distanceToSqr(ductCenter);
+        return distSq < 0.75; // ~0.87 blocks radius, covers items crossing duct boundaries
     }
 
     /**

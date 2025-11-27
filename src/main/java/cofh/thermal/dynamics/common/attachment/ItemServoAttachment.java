@@ -161,6 +161,7 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
         // Try to reinject overflow items first (priority over new extractions)
         if (isOverflowing()) {
             tryReinjectOverflow();
+            return; // Block new extractions until overflow is cleared
         }
 
         // Decrement extraction cooldown

@@ -96,10 +96,10 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     public void tick() {
         super.tick();
 
-        // Skip item processing if no items are in transit (optimization)
-        boolean hasItems = !itemsInTransit.isEmpty() || !returningItems.isEmpty();
+        // Track if we HAD items at start of tick (to know if we need final render clear)
+        boolean hadItemsAtStart = !itemsInTransit.isEmpty() || !returningItems.isEmpty();
 
-        if (hasItems) {
+        if (hadItemsAtStart) {
             // Check if topology changed - need to validate/backflow items
             long currentTopology = getTopologyVersion();
             if (lastCheckedTopologyVersion != currentTopology) {
@@ -113,14 +113,42 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             // Process returning items
             processReturningItems();
 
-            // Update render data only for windowed ducts with items nearby
+            // Update render data for windowed ducts
+            // IMPORTANT: We must update even if queues are now empty to clear stale renders
             updateRenderData();
+
+            // If all items were just removed this tick, do one final render update to clear
+            boolean hasItemsNow = !itemsInTransit.isEmpty() || !returningItems.isEmpty();
+            if (!hasItemsNow) {
+                // Force a final update to clear any lingering render data
+                clearAllRenderData();
+            }
+        }
+    }
+
+    /**
+     * Clear render data from all windowed ducts when no items remain in transit.
+     */
+    private void clearAllRenderData() {
+        if (world.isClientSide) return;
+
+        for (ItemGridNode node : getNodes().values()) {
+            try {
+                if (node.getDuct() instanceof cofh.thermal.dynamics.common.block.entity.duct.ItemDuctBlockEntity ductEntity) {
+                    if (ductEntity.isWindowed() && ductEntity.hasLevel()) {
+                        ductEntity.update();
+                    }
+                }
+            } catch (Exception e) {
+                // Silent failure
+            }
         }
     }
     
     /**
      * Handle topology changes by validating all items' paths.
-     * Items with invalid paths are reversed back to their origin.
+     * Items with invalid forward paths are reversed back to origin IF return path is valid.
+     * If both paths are broken, item is dropped as entity.
      */
     private void handleTopologyChange() {
         LOGGER.info("handleTopologyChange called - checking {} items in transit", itemsInTransit.size());
@@ -129,68 +157,77 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         while (iterator.hasNext()) {
             ItemInTransit item = iterator.next();
 
-            // Check if the item's destination is still valid
-            boolean pathValid = isPathValid(item);
-            LOGGER.info("  Item {} path valid: {} (origin={}, dest={}, path={})",
-                item.stack, pathValid, item.origin, item.destination, item.path);
+            // Check if the item's forward path (to destination) is still valid
+            boolean forwardPathValid = isPathValid(item);
+            LOGGER.info("  Item {} forward path valid: {} (origin={}, dest={}, path={})",
+                item.stack, forwardPathValid, item.origin, item.destination, item.path);
 
-            if (!pathValid) {
-                // Path is broken - initiate backflow to origin
-                LOGGER.info("  Path invalid - initiating backflow for {}", item.stack);
-
-                // Before reversing, check if the origin (servo) is still in the grid
-                // If the servo duct was broken, we need to drop the item instead
-                if (!getNodes().containsKey(item.origin)) {
-                    LOGGER.info("  Origin {} no longer in grid - dropping as entity", item.origin);
-                    dropItemAsEntity(item);
-                    removeItemFromTransitTracking(item);
-                    iterator.remove();
-                    continue;
-                }
-
-                // reverse() now preserves position - don't reset distanceTraveled after
-                item.reverse();
-
-                // After reverse: item.destination is now the servo duct position
-                // Check if the servo duct still exists in the grid
-                if (!getNodes().containsKey(item.destination)) {
-                    LOGGER.info("  Destination (servo) {} no longer in grid after reverse - dropping as entity", item.destination);
-                    dropItemAsEntity(item);
-                    removeItemFromTransitTracking(item);
-                    iterator.remove();
-                    continue;
-                }
-
-                // CRITICAL: Filter the path to only include positions that still exist as nodes
-                // After reverse, the path may contain the broken duct's position
-                // Also remove duplicates and ensure path is valid
-                List<BlockPos> validPath = new ArrayList<>();
-                BlockPos lastPos = null;
-                for (BlockPos pathPos : item.path) {
-                    // Only add if it's a valid node AND not a duplicate of the previous position
-                    if (getNodes().containsKey(pathPos) && !pathPos.equals(lastPos)) {
-                        validPath.add(pathPos);
-                        lastPos = pathPos;
-                    }
-                }
-                item.path = validPath;
-                LOGGER.info("  Filtered path to {} valid positions: {}", validPath.size(), validPath);
-
-                removeItemFromTransitTracking(item);
-                returningItems.add(item);
-                iterator.remove();
-
-                // Notify the origin servo about the backflow
-                notifyServoOfBackflow(item);
+            if (forwardPathValid) {
+                // Forward path is fine - item continues to destination
+                continue;
             }
+
+            // Forward path is broken - check if we can return to origin
+            boolean returnPathValid = canReturnToOrigin(item);
+            LOGGER.info("  Forward path broken - return path valid: {}", returnPathValid);
+
+            if (!returnPathValid) {
+                // Both paths broken - drop item as entity at current position
+                LOGGER.info("  Both paths broken - dropping {} as entity", item.stack);
+                dropItemAsEntity(item);
+                removeItemFromTransitTracking(item);
+                iterator.remove();
+                continue;
+            }
+
+            // Return path is valid - initiate backflow to origin
+            LOGGER.info("  Initiating backflow for {} to origin {}", item.stack, item.origin);
+
+            // reverse() now preserves position - don't reset distanceTraveled after
+            item.reverse();
+
+            // After reverse: item.destination is now the servo duct position
+            // Double-check it still exists (should be true since canReturnToOrigin passed)
+            if (!getNodes().containsKey(item.destination)) {
+                LOGGER.warn("  Destination (servo) {} no longer in grid after reverse - dropping as entity", item.destination);
+                dropItemAsEntity(item);
+                removeItemFromTransitTracking(item);
+                iterator.remove();
+                continue;
+            }
+
+            // CRITICAL: Filter the path to only include positions that still exist as nodes
+            // After reverse, the path may contain the broken duct's position
+            // Also remove duplicates and ensure path is valid
+            List<BlockPos> validPath = new ArrayList<>();
+            BlockPos lastPos = null;
+            for (BlockPos pathPos : item.path) {
+                // Only add if it's a valid node AND not a duplicate of the previous position
+                if (getNodes().containsKey(pathPos) && !pathPos.equals(lastPos)) {
+                    validPath.add(pathPos);
+                    lastPos = pathPos;
+                }
+            }
+            item.path = validPath;
+            LOGGER.info("  Filtered path to {} valid positions: {}", validPath.size(), validPath);
+
+            removeItemFromTransitTracking(item);
+            returningItems.add(item);
+            iterator.remove();
+
+            // Notify the origin servo about the backflow
+            notifyServoOfBackflow(item);
         }
     }
 
     /**
-     * Check if an item's path is still valid after a topology change.
-     * This checks that the destination exists and all path nodes exist.
-     * We do NOT check edges because path nodes may not be directly connected
-     * in the graph (they might be connected through edge ducts).
+     * Check if an item's FORWARD path is still valid after a topology change.
+     *
+     * IMPORTANT: We only check if the path AHEAD of the item is valid.
+     * If a duct BEHIND the item breaks (between origin and current position),
+     * the item should continue forward to destination.
+     * If a duct AHEAD of the item breaks (between current position and destination),
+     * THEN the item should backflow.
      */
     private boolean isPathValid(ItemInTransit item) {
         // Check if destination still exists and has item handler
@@ -206,24 +243,43 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             return false;
         }
 
-        // Check origin node exists
-        if (!getNodes().containsKey(item.origin)) {
-            LOGGER.info("Path invalid: origin {} not in grid nodes", item.origin);
-            return false;
+        // Calculate which path nodes are AHEAD of the item (not yet passed)
+        // We don't care about path nodes behind the item - if they're broken, item continues forward
+        double totalDistance = item.getTotalDistance();
+        double progress = totalDistance > 0 ? item.distanceTraveled / totalDistance : 0;
+
+        // Build full path: origin -> path nodes -> destination
+        List<BlockPos> fullPath = new ArrayList<>();
+        fullPath.add(item.origin);
+        fullPath.addAll(item.path);
+        fullPath.add(item.destination);
+
+        // Calculate which segment the item is on
+        double accumulatedDistance = 0;
+        int currentSegmentIndex = 0;
+
+        for (int i = 0; i < fullPath.size() - 1; i++) {
+            double segmentDist = Math.sqrt(fullPath.get(i).distSqr(fullPath.get(i + 1)));
+            if (item.distanceTraveled <= accumulatedDistance + segmentDist) {
+                currentSegmentIndex = i;
+                break;
+            }
+            accumulatedDistance += segmentDist;
+            currentSegmentIndex = i + 1;
         }
 
-        // Check if the path through ducts is still connected
-        // Verify all path nodes still exist
-        for (BlockPos pathPos : item.path) {
+        // Only check nodes AHEAD of current position (from currentSegmentIndex+1 to end)
+        // We skip the current segment's start node since item has passed it
+        for (int i = currentSegmentIndex + 1; i < fullPath.size() - 1; i++) {
+            BlockPos pathPos = fullPath.get(i);
             if (!getNodes().containsKey(pathPos)) {
-                LOGGER.info("Path invalid: path position {} not in grid nodes", pathPos);
+                LOGGER.info("Path invalid: AHEAD path position {} not in grid nodes (item at segment {})",
+                    pathPos, currentSegmentIndex);
                 return false;
             }
         }
 
-        // Path is valid if all nodes exist
-        // Note: We don't check edges because consecutive path nodes may not have
-        // direct graph edges (they might be connected through edge ducts that aren't nodes)
+        // Path ahead is valid - item can continue to destination
         return true;
     }
 
@@ -265,6 +321,59 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         // We trust that the item can reach the destination through whatever path remains
         // If a path node was removed while item is returning, we'll handle it dynamically
 
+        return true;
+    }
+
+    /**
+     * Check if an item can return to its origin from its current position.
+     * This is used to determine if backflow is possible when forward path is broken.
+     *
+     * IMPORTANT: We check if the path BEHIND the item (from current position to origin) is valid.
+     * If the origin or path behind is broken, we cannot backflow.
+     */
+    private boolean canReturnToOrigin(ItemInTransit item) {
+        // First check if origin (servo duct) still exists in our grid
+        if (!getNodes().containsKey(item.origin)) {
+            LOGGER.info("  Cannot return: origin {} not in grid nodes", item.origin);
+            return false;
+        }
+
+        // Calculate which segment the item is on
+        double totalDistance = item.getTotalDistance();
+        double progress = totalDistance > 0 ? item.distanceTraveled / totalDistance : 0;
+
+        // Build full path: origin -> path nodes -> destination
+        List<BlockPos> fullPath = new ArrayList<>();
+        fullPath.add(item.origin);
+        fullPath.addAll(item.path);
+        fullPath.add(item.destination);
+
+        // Calculate which segment the item is on
+        double accumulatedDistance = 0;
+        int currentSegmentIndex = 0;
+
+        for (int i = 0; i < fullPath.size() - 1; i++) {
+            double segmentDist = Math.sqrt(fullPath.get(i).distSqr(fullPath.get(i + 1)));
+            if (item.distanceTraveled <= accumulatedDistance + segmentDist) {
+                currentSegmentIndex = i;
+                break;
+            }
+            accumulatedDistance += segmentDist;
+            currentSegmentIndex = i + 1;
+        }
+
+        // Check nodes BEHIND current position (from origin to current segment start)
+        // These are nodes at indices 1 to currentSegmentIndex (excluding origin at 0 and destination at end)
+        for (int i = 1; i <= currentSegmentIndex && i < fullPath.size() - 1; i++) {
+            BlockPos pathPos = fullPath.get(i);
+            if (!getNodes().containsKey(pathPos)) {
+                LOGGER.info("  Cannot return: BEHIND path position {} not in grid nodes (item at segment {})",
+                    pathPos, currentSegmentIndex);
+                return false;
+            }
+        }
+
+        // Return path is valid - item can backflow to origin
         return true;
     }
 
@@ -662,71 +771,130 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
 
         LOGGER.info("Built nodeToGrid with {} entries: {}", nodeToGrid.size(), nodeToGrid.keySet());
 
-        // Process items in transit - transfer to grid containing their origin
+        // Process items in transit - decide based on which endpoints are reachable
         for (ItemInTransit item : itemsInTransit) {
             LOGGER.info("Processing forward item {} - origin={}, dest={}, path={}, distTraveled={}",
                 item.stack, item.origin, item.destination, item.path, item.distanceTraveled);
 
-            // First try to find grid containing the origin
-            ItemGrid targetGrid = nodeToGrid.get(item.origin);
-            LOGGER.info("  nodeToGrid.get(origin={}) = {}", item.origin, targetGrid != null ? "found" : "null");
+            // Find which grid(s) contain our endpoints
+            ItemGrid originGrid = nodeToGrid.get(item.origin);
+            LOGGER.info("  originGrid = {}", originGrid != null ? "found" : "null");
 
-            // If origin not found, check path positions (the path contains node positions)
-            if (targetGrid == null && item.path != null) {
-                for (BlockPos pathPos : item.path) {
-                    targetGrid = nodeToGrid.get(pathPos);
-                    LOGGER.info("  nodeToGrid.get(pathPos={}) = {}", pathPos, targetGrid != null ? "found" : "null");
-                    if (targetGrid != null) {
-                        LOGGER.info("Found grid via path position {} for item {}", pathPos, item.stack);
-                        break;
+            // Check if destination has an item handler (external block capability)
+            BlockEntity destTile = world.getBlockEntity(item.destination);
+            boolean destHasHandler = destTile != null &&
+                destTile.getCapability(ForgeCapabilities.ITEM_HANDLER, item.destinationSide).isPresent();
+            LOGGER.info("  destTile exists = {}, hasHandler = {}", destTile != null, destHasHandler);
+
+            // Find which grid connects to the destination
+            // We need to check if any grid has a path node that can reach the destination
+            ItemGrid destGrid = null;
+            for (ItemGrid newGrid : others) {
+                // Check if any node in this grid is adjacent to the destination
+                for (BlockPos nodePos : newGrid.getNodes().keySet()) {
+                    // Check if nodePos is adjacent to destination
+                    for (Direction dir : Direction.values()) {
+                        if (nodePos.relative(dir).equals(item.destination)) {
+                            destGrid = newGrid;
+                            LOGGER.info("  Found destGrid via adjacent node {} to dest {}", nodePos, item.destination);
+                            break;
+                        }
                     }
+                    if (destGrid != null) break;
                 }
+                if (destGrid != null) break;
             }
 
-            if (targetGrid != null) {
-                // Check if we can find the origin in this grid for proper backflow
-                boolean originInTargetGrid = targetGrid.getNodes().containsKey(item.origin);
+            // Decision logic:
+            // 1. If destination is reachable AND item can reach it -> continue forward
+            // 2. If destination NOT reachable BUT origin is -> backflow
+            // 3. If neither reachable -> drop as entity
 
-                if (originInTargetGrid) {
-                    // Origin is in the target grid - reverse and send back
-                    // reverse() preserves position - item continues from where it was
-                    item.reverse();
+            if (destHasHandler && destGrid != null) {
+                // Destination is reachable - check if item can actually reach it
+                // We need to find the item's CURRENT position and see if there's a path to dest
 
-                    // Filter the path to only include positions that exist in the target grid
-                    // After reverse, path is reversed too, so we need valid positions
+                // Calculate item's current position based on distance traveled
+                net.minecraft.world.phys.Vec3 currentPos = calculateItemWorldPosition(item);
+                BlockPos currentBlockPos = BlockPos.containing(currentPos);
+                LOGGER.info("  Item current position: {}", currentBlockPos);
+
+                // Find which grid the item's current position is in
+                // Check if current position is a node in any grid
+                ItemGrid itemCurrentGrid = nodeToGrid.get(currentBlockPos);
+
+                // If not directly on a node, check adjacent positions
+                if (itemCurrentGrid == null) {
+                    for (Direction dir : Direction.values()) {
+                        BlockPos adjacent = currentBlockPos.relative(dir);
+                        itemCurrentGrid = nodeToGrid.get(adjacent);
+                        if (itemCurrentGrid != null) {
+                            LOGGER.info("  Found item grid via adjacent node {}", adjacent);
+                            break;
+                        }
+                    }
+                }
+
+                // Fallback to origin grid if still not found
+                if (itemCurrentGrid == null) {
+                    itemCurrentGrid = originGrid;
+                    LOGGER.info("  Fallback to origin grid for item position");
+                }
+
+                LOGGER.info("  itemCurrentGrid = {}, destGrid = {}, same = {}",
+                    itemCurrentGrid != null ? "found" : "null",
+                    destGrid != null ? "found" : "null",
+                    itemCurrentGrid == destGrid);
+
+                if (itemCurrentGrid == destGrid) {
+                    // Item is in the grid that can reach destination - continue forward!
+                    // Filter path to only include valid nodes in this grid
                     List<BlockPos> validPath = new ArrayList<>();
                     for (BlockPos pathPos : item.path) {
-                        if (targetGrid.getNodes().containsKey(pathPos)) {
+                        if (destGrid.getNodes().containsKey(pathPos)) {
                             validPath.add(pathPos);
                         }
                     }
                     item.path = validPath;
-                    LOGGER.info("Filtered path to {} positions for returning item", validPath.size());
-
-                    targetGrid.returningItems.add(item);
-
-                    // Notify the servo about the backflow
-                    ItemGridNode originNode = targetGrid.getNodes().get(item.destination);
-                    if (originNode != null && originNode.getDuct() != null) {
-                        if (originNode.getDuct().getAttachment(item.destinationSide) instanceof cofh.thermal.dynamics.common.attachment.ItemServoAttachment servo) {
-                            servo.notifyBackflow();
-                        }
-                    }
-
-                    LOGGER.info("Item {} transferred to origin grid during split, returning to origin at {}",
-                        item.stack, item.destination);
+                    destGrid.itemsInTransit.add(item);
+                    LOGGER.info("Item {} continues forward to destination {} in destGrid", item.stack, item.destination);
+                    continue;
                 } else {
-                    // Origin is NOT in the found grid - the item is on the wrong side of the split
-                    // Drop the item at its current position since it can't reach home
-                    dropItemAsEntity(item);
-                    LOGGER.info("Item {} dropped - origin {} not reachable from path grid",
-                        item.stack, item.origin);
+                    LOGGER.info("  Item is in different grid than destGrid - cannot continue forward");
                 }
+            }
+
+            // Destination not reachable from item's position - try backflow to origin
+            if (originGrid != null) {
+                // Can return to origin - reverse and send back
+                item.reverse();
+
+                // Filter the path to only include positions that exist in the origin grid
+                List<BlockPos> validPath = new ArrayList<>();
+                for (BlockPos pathPos : item.path) {
+                    if (originGrid.getNodes().containsKey(pathPos)) {
+                        validPath.add(pathPos);
+                    }
+                }
+                item.path = validPath;
+                LOGGER.info("Filtered path to {} positions for returning item", validPath.size());
+
+                originGrid.returningItems.add(item);
+
+                // Notify the servo about the backflow
+                ItemGridNode originNode = originGrid.getNodes().get(item.destination);
+                if (originNode != null && originNode.getDuct() != null) {
+                    if (originNode.getDuct().getAttachment(item.destinationSide) instanceof cofh.thermal.dynamics.common.attachment.ItemServoAttachment servo) {
+                        servo.notifyBackflow();
+                    }
+                }
+
+                LOGGER.info("Item {} backflowing to origin {} in originGrid", item.stack, item.destination);
             } else {
-                // No grid found at all - drop as entity at current position
+                // Neither destination nor origin reachable - drop as entity
                 dropItemAsEntity(item);
-                LOGGER.debug("Item {} dropped as entity during split - origin {} not in any grid (path={})",
-                    item.stack, item.origin, item.path);
+                LOGGER.info("Item {} dropped - neither origin {} nor destination {} reachable",
+                    item.stack, item.origin, item.destination);
             }
         }
 
@@ -760,6 +928,13 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         itemsInTransit.clear();
         returningItems.clear();
         itemsInTransitToDestination.clear();
+
+        // IMPORTANT: Clear render data from all ducts in the new grids
+        // This prevents "ghost" items from appearing frozen in the old positions
+        // The old grid's nodes are already transferred, so we clear from the new grids
+        for (ItemGrid newGrid : others) {
+            newGrid.clearAllRenderData();
+        }
 
         // Cleanup grid tracking
         cleanup();

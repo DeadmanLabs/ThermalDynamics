@@ -1,6 +1,8 @@
 package cofh.thermal.dynamics.common.grid.item;
 
+import cofh.thermal.dynamics.api.grid.IDuct;
 import cofh.thermal.dynamics.api.helper.GridHelper;
+import cofh.thermal.dynamics.common.block.entity.duct.ItemDuctBlockEntity;
 import cofh.thermal.dynamics.common.grid.Grid;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -35,8 +37,11 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     // Track active grids for client-side rendering
     private static final Map<Level, Set<ItemGrid>> activeGrids = new ConcurrentHashMap<>();
     
-    // Speed in blocks per tick (0.05 = 1 block per second at 20 TPS for better visibility)
-    private static final float ITEM_SPEED = 0.05f;
+    // Travel speed constants (blocks per tick)
+    // Normal ducts: 0.05 = 1 block per second at 20 TPS
+    // Impulse ducts: 0.20 = 4 blocks per second at 20 TPS (4x faster)
+    private static final float NORMAL_ITEM_SPEED = 0.05f;
+    private static final float IMPULSE_ITEM_SPEED = 0.20f;
 
     // Epsilon for float comparison to handle precision issues after deserialization
     private static final float DISTANCE_EPSILON = 0.001f;
@@ -487,6 +492,66 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         }
     }
 
+    /**
+     * Calculate which duct the item is currently traveling through.
+     * Used to determine the appropriate travel speed.
+     * @param item The item in transit
+     * @return BlockPos of the duct segment the item is currently on
+     */
+    private BlockPos getCurrentDuctPosition(ItemInTransit item) {
+        double totalDistance = item.getTotalDistance();
+        if (totalDistance <= 0) {
+            return item.origin;
+        }
+
+        // Build full path: origin -> path nodes -> destination
+        List<BlockPos> fullPath = new ArrayList<>();
+        fullPath.add(item.origin);
+        fullPath.addAll(item.path);
+        // Note: destination is external block, not a duct - don't include for speed lookup
+
+        if (fullPath.isEmpty()) {
+            return item.origin;
+        }
+
+        // Find which segment we're on
+        double accumulatedDistance = 0;
+        BlockPos lastDuctPos = item.origin;
+
+        for (int i = 0; i < fullPath.size() - 1; i++) {
+            BlockPos segmentStart = fullPath.get(i);
+            BlockPos segmentEnd = fullPath.get(i + 1);
+            double segmentDist = Math.sqrt(segmentStart.distSqr(segmentEnd));
+
+            if (item.distanceTraveled <= accumulatedDistance + segmentDist) {
+                // Item is on this segment - return the segment start (duct position)
+                return segmentStart;
+            }
+            accumulatedDistance += segmentDist;
+            lastDuctPos = segmentEnd;
+        }
+
+        // Item is on final segment (last duct to destination)
+        return lastDuctPos;
+    }
+
+    /**
+     * Get the item travel speed at a specific duct position.
+     * Impulse ducts provide 4x faster travel speed.
+     * @param pos The BlockPos to check
+     * @return IMPULSE_ITEM_SPEED if impulse duct, otherwise NORMAL_ITEM_SPEED
+     */
+    private float getSpeedAtPosition(BlockPos pos) {
+        ItemGridNode node = getNodes().get(pos);
+        if (node != null) {
+            IDuct<?, ?> duct = node.getDuct();
+            if (duct instanceof ItemDuctBlockEntity itemDuct && itemDuct.isImpulse()) {
+                return IMPULSE_ITEM_SPEED;
+            }
+        }
+        return NORMAL_ITEM_SPEED;
+    }
+
     private void processItemsInTransit() {
         Iterator<ItemInTransit> iterator = itemsInTransit.iterator();
         while (iterator.hasNext()) {
@@ -495,8 +560,12 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             // Note: Per-tick rerouting removed - path validation now handled by handleTopologyChange()
             // This significantly improves performance by avoiding O(N) scans every tick
 
-            // Update item position based on actual speed
-            item.distanceTraveled += ITEM_SPEED;
+            // Calculate speed based on current duct type (impulse ducts are 4x faster)
+            BlockPos currentDuct = getCurrentDuctPosition(item);
+            float speed = getSpeedAtPosition(currentDuct);
+
+            // Update item position based on current segment's speed
+            item.distanceTraveled += speed;
             double totalDistance = item.getTotalDistance();
 
             // Check if item reached destination (use epsilon for float precision tolerance)
@@ -541,8 +610,12 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
 
             double totalDistance = item.getTotalDistance();
 
-            // Update item position
-            item.distanceTraveled += ITEM_SPEED;
+            // Calculate speed based on current duct type (impulse ducts are 4x faster)
+            BlockPos currentDuct = getCurrentDuctPosition(item);
+            float speed = getSpeedAtPosition(currentDuct);
+
+            // Update item position based on current segment's speed
+            item.distanceTraveled += speed;
 
             // Check if item reached origin (use epsilon for float precision tolerance)
             if (item.distanceTraveled >= totalDistance - DISTANCE_EPSILON) {

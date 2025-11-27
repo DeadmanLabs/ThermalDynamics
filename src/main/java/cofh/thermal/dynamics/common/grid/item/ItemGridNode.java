@@ -4,6 +4,7 @@ import cofh.core.util.filter.IFilter;
 import cofh.thermal.dynamics.api.grid.IDuct;
 import cofh.thermal.dynamics.api.grid.ITickableGridNode;
 import cofh.thermal.dynamics.common.attachment.IFilterableAttachment;
+import cofh.thermal.dynamics.common.block.entity.duct.ItemDuctBlockEntity;
 import cofh.thermal.dynamics.common.grid.GridNode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -22,7 +23,11 @@ import java.util.stream.Collectors;
  * Handles pathfinding and item routing.
  */
 public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNode {
-    
+
+    // Routing weight constants for Dense/Vacuum duct priority
+    private static final int DENSE_PENALTY = 1000;
+    private static final int VACUUM_PRIORITY = -10000;
+
     public ItemGridNode(ItemGrid grid) {
         super(grid);
     }
@@ -200,17 +205,70 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
     public static class DestinationResult {
         public final BlockPos destination;
         public final PathInfo pathInfo;
-        
+
         public DestinationResult(BlockPos destination, PathInfo pathInfo) {
             this.destination = destination;
             this.pathInfo = pathInfo;
         }
     }
 
+    /**
+     * Calculate the routing weight for a path.
+     * - Vacuum ducts: Return very negative weight (highest priority, checked first)
+     * - Dense ducts: Add +1000 per dense duct (lowest priority, overflow only)
+     * - Normal ducts: Just count path length
+     */
+    private int calculatePathWeight(List<BlockPos> path) {
+        int weight = path.size();  // Base weight = hop count
+        boolean hasVacuum = false;
+        int denseCount = 0;
+
+        // For direct connections (empty path), check origin duct only
+        if (path.isEmpty()) {
+            IDuct<?, ?> originDuct = getDuct();
+            if (originDuct instanceof ItemDuctBlockEntity itemDuct) {
+                if (itemDuct.isVacuum()) return VACUUM_PRIORITY;
+                if (itemDuct.isDense()) return DENSE_PENALTY;
+            }
+            return 0;  // Direct connection, normal duct
+        }
+
+        // Check each duct in the path
+        for (BlockPos pathPos : path) {
+            ItemGridNode node = grid.getNodes().get(pathPos);
+            if (node != null && node.getDuct() instanceof ItemDuctBlockEntity itemDuct) {
+                if (itemDuct.isVacuum()) {
+                    hasVacuum = true;
+                }
+                if (itemDuct.isDense()) {
+                    denseCount++;
+                }
+            }
+        }
+
+        // Also check origin duct (servo's duct)
+        IDuct<?, ?> originDuct = getDuct();
+        if (originDuct instanceof ItemDuctBlockEntity itemDuct) {
+            if (itemDuct.isVacuum()) {
+                hasVacuum = true;
+            }
+            if (itemDuct.isDense()) {
+                denseCount++;
+            }
+        }
+
+        if (hasVacuum) {
+            return VACUUM_PRIORITY + weight;  // Very negative = highest priority
+        }
+
+        return weight + (denseCount * DENSE_PENALTY);  // Dense adds massive penalty
+    }
+
     public DestinationResult findBestDestination(ItemStack stack) {
-        // Sort destinations by path length to prioritize shortest paths
+        // Sort destinations by weighted path calculation
+        // Vacuum ducts have highest priority (negative weight), Dense ducts have lowest priority (+1000 per duct)
         List<Map.Entry<BlockPos, PathInfo>> sortedDestinations = new ArrayList<>(destinationCache.entrySet());
-        sortedDestinations.sort(Comparator.comparingInt(entry -> entry.getValue().path.size()));
+        sortedDestinations.sort(Comparator.comparingInt(entry -> calculatePathWeight(entry.getValue().path)));
 
         for (Map.Entry<BlockPos, PathInfo> entry : sortedDestinations) {
             BlockPos destPos = entry.getKey();

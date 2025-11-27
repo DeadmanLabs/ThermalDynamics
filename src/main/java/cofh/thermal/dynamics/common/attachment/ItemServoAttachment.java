@@ -4,6 +4,7 @@ import cofh.core.util.filter.BaseItemFilter;
 import cofh.core.util.filter.IFilter;
 import cofh.lib.api.IConveyableData;
 import cofh.thermal.dynamics.api.grid.IDuct;
+import cofh.thermal.dynamics.common.block.entity.duct.ItemDuctBlockEntity;
 import cofh.thermal.dynamics.common.inventory.attachment.ItemServoAttachmentMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -51,10 +52,11 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     protected final Direction side;
 
     public int amountTransfer = DEFAULT_TRANSFER;
-    
-    // Extraction timing - extract every 5 seconds (100 ticks)
-    private int extractionCooldown = 0;
-    private static final int EXTRACTION_INTERVAL = 100; // 5 seconds at 20 TPS
+
+    // Extraction timing - base interval for normal ducts (200 ticks = 10 seconds = 6 extractions/min)
+    // Impulse ducts use 1/4 of this (50 ticks = 2.5 seconds = 24 extractions/min)
+    protected int extractionCooldown = 0;
+    protected static final int BASE_EXTRACTION_INTERVAL = 200; // 10 seconds at 20 TPS (6/min)
 
     protected BaseItemFilter filter = new BaseItemFilter(15);
     protected RedstoneControlLogic rsControl = new RedstoneControlLogic(this);
@@ -96,6 +98,19 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     
     public int getMaxTransfer() {
         return MAX_TRANSFER;
+    }
+
+    /**
+     * Get the extraction interval based on the attached duct type.
+     * Impulse ducts provide 4x faster extraction rate.
+     * @return Ticks between extractions (200 for normal, 50 for impulse)
+     */
+    protected int getExtractionInterval() {
+        // Check if attached to impulse duct
+        if (duct instanceof ItemDuctBlockEntity itemDuct && itemDuct.isImpulse()) {
+            return BASE_EXTRACTION_INTERVAL / 4;  // 50 ticks for impulse (24/min)
+        }
+        return BASE_EXTRACTION_INTERVAL;  // 200 ticks for normal (6/min)
     }
 
     public ItemStackHandler getOverflowStorage() {
@@ -173,8 +188,8 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
         // Extract items from connected inventory and route through grid
         extractAndRouteItems();
 
-        // Set cooldown for next extraction
-        extractionCooldown = EXTRACTION_INTERVAL;
+        // Set cooldown for next extraction (varies by duct type)
+        extractionCooldown = getExtractionInterval();
     }
 
     /**

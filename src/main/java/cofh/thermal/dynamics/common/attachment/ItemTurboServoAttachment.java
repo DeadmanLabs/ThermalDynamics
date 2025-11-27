@@ -1,6 +1,7 @@
 package cofh.thermal.dynamics.common.attachment;
 
 import cofh.thermal.dynamics.api.grid.IDuct;
+import cofh.thermal.dynamics.common.block.entity.duct.ItemDuctBlockEntity;
 import cofh.thermal.dynamics.common.inventory.attachment.ItemTurboServoAttachmentMenu;
 import net.minecraft.core.Direction;
 import net.minecraftforge.common.util.LazyOptional;
@@ -19,8 +20,12 @@ public class ItemTurboServoAttachment extends ItemServoAttachment {
     public static final Component DISPLAY_NAME = Component.translatable("attachment.thermal.item_turbo_servo");
 
     public static final int DEFAULT_TRANSFER = 1; // Default items per operation
-    public static final int MIN_TRANSFER = 1; // Minimum items per operation  
+    public static final int MIN_TRANSFER = 1; // Minimum items per operation
     public static final int MAX_TRANSFER = 64; // Maximum items per operation for turbo servo
+
+    // Turbo extraction interval for normal ducts (71 ticks ≈ 3.5 seconds = 17 extractions/min)
+    // Impulse ducts use 1/4 of this (17 ticks ≈ 0.85 seconds = 72 extractions/min)
+    protected static final int TURBO_BASE_EXTRACTION_INTERVAL = 71;
 
     public ItemTurboServoAttachment(IDuct<?, ?> duct, Direction side) {
         super(duct, side);
@@ -30,6 +35,21 @@ public class ItemTurboServoAttachment extends ItemServoAttachment {
     @Override
     public int getMaxTransfer() {
         return MAX_TRANSFER; // Override parent's MAX_TRANSFER (8) with turbo's limit (64)
+    }
+
+    /**
+     * Get the extraction interval for turbo servo based on the attached duct type.
+     * Turbo servo is ~2.8x faster than basic servo.
+     * Impulse ducts provide additional 4x faster extraction rate.
+     * @return Ticks between extractions (71 for normal, 17 for impulse)
+     */
+    @Override
+    protected int getExtractionInterval() {
+        // Check if attached to impulse duct
+        if (duct instanceof ItemDuctBlockEntity itemDuct && itemDuct.isImpulse()) {
+            return TURBO_BASE_EXTRACTION_INTERVAL / 4;  // ~17 ticks for turbo+impulse (72/min)
+        }
+        return TURBO_BASE_EXTRACTION_INTERVAL;  // 71 ticks for turbo+normal (17/min)
     }
 
     @Override
@@ -53,9 +73,84 @@ public class ItemTurboServoAttachment extends ItemServoAttachment {
         if (!rsControl.getState()) {
             return;
         }
-        
-        // Extract items from connected inventory and route through grid (turbo version - no cooldown)
+
+        // Try to reinject overflow items first (priority over new extractions)
+        if (isOverflowing()) {
+            tryReinjectOverflow();
+            return; // Block new extractions until overflow is cleared
+        }
+
+        // Decrement extraction cooldown
+        if (extractionCooldown > 0) {
+            extractionCooldown--;
+            return;
+        }
+
+        // Extract items from connected inventory and route through grid
         extractAndRouteItems();
+
+        // Set cooldown for next extraction (varies by duct type)
+        extractionCooldown = getExtractionInterval();
+    }
+
+    /**
+     * Try to reinject overflow items back into the grid when a valid path exists.
+     */
+    private void tryReinjectOverflow() {
+        try {
+            // Get grid for routing
+            if (!(duct.getGrid() instanceof cofh.thermal.dynamics.common.grid.item.ItemGrid itemGrid)) {
+                return;
+            }
+
+            // Get our grid node
+            cofh.thermal.dynamics.common.grid.item.ItemGridNode ourNode = itemGrid.getNodes().get(pos());
+            if (ourNode == null) {
+                return;
+            }
+
+            // Try to reinject items from overflow storage
+            for (int slot = 0; slot < overflowStorage.getSlots(); slot++) {
+                net.minecraft.world.item.ItemStack stack = overflowStorage.getStackInSlot(slot);
+                if (stack.isEmpty()) {
+                    continue;
+                }
+
+                // Find a valid destination for this item
+                cofh.thermal.dynamics.common.grid.item.ItemGridNode.DestinationResult destination = ourNode.findBestDestination(stack);
+                if (destination == null) {
+                    continue; // No valid path yet - keep in overflow
+                }
+
+                net.minecraft.core.BlockPos destPos = destination.destination;
+                cofh.thermal.dynamics.common.grid.item.ItemGridNode.PathInfo pathInfo = destination.pathInfo;
+
+                // Check if destination has capacity
+                int availableCapacity = itemGrid.getAvailableCapacity(destPos, pathInfo.side, stack);
+                if (availableCapacity <= 0) {
+                    continue;
+                }
+
+                // Extract only what can fit
+                int toExtract = Math.min(stack.getCount(), availableCapacity);
+                net.minecraft.world.item.ItemStack extracted = overflowStorage.extractItem(slot, toExtract, false);
+
+                if (!extracted.isEmpty()) {
+                    // Route item through grid
+                    itemGrid.insertItem(extracted, pos(), side(), destPos, pathInfo.side, pathInfo.path);
+
+                    // Clear backflow flag if we successfully reinjected
+                    if (!isOverflowing()) {
+                        clearBackflow();
+                    }
+
+                    // Only process one item per tick to avoid flooding the network
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            // Silent failure for performance
+        }
     }
     
     private void extractAndRouteItems() {

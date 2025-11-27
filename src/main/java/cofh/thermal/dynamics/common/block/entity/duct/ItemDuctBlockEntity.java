@@ -65,6 +65,41 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
         return windowed;
     }
 
+    /**
+     * Check if this duct is an impulse variant.
+     * Impulse ducts provide faster extraction and travel speeds (4x multiplier).
+     */
+    public boolean isImpulse() {
+        var registryName = getBlockState().getBlock().builtInRegistryHolder().key().location();
+        return registryName.getPath().contains("impulse");
+    }
+
+    /**
+     * Check if this duct is a dense variant.
+     * Dense ducts add +1000 to path weight, making them lowest priority (overflow only).
+     */
+    public boolean isDense() {
+        var registryName = getBlockState().getBlock().builtInRegistryHolder().key().location();
+        return registryName.getPath().contains("dense");
+    }
+
+    /**
+     * Check if this duct is a vacuum variant.
+     * Vacuum ducts have highest routing priority - paths through them are checked first.
+     */
+    public boolean isVacuum() {
+        var registryName = getBlockState().getBlock().builtInRegistryHolder().key().location();
+        return registryName.getPath().contains("vacuum");
+    }
+
+    /**
+     * Get the speed multiplier for this duct type.
+     * @return 4.0f for impulse ducts, 1.0f for regular ducts
+     */
+    public float getSpeedMultiplier() {
+        return isImpulse() ? 4.0f : 1.0f;
+    }
+
     @Override
     protected boolean canConnectToBlock(Direction dir) {
         if (!connections[dir.ordinal()].allowBlockConnection()) {
@@ -273,11 +308,15 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
             return true;
         }
 
-        // Also check if the item is within 0.5 blocks of this duct's center
+        // Also check if the item is within this duct's block bounds
         // This ensures we render items that are crossing between ducts
         Vec3 ductCenter = Vec3.atCenterOf(worldPosition);
         double distSq = itemPos.distanceToSqr(ductCenter);
-        return distSq < 0.75; // ~0.87 blocks radius, covers items crossing duct boundaries
+        if (distSq < 0.75) { // ~0.87 blocks radius, covers items crossing duct boundaries
+            return true;
+        }
+
+        return false;
     }
 
     /**

@@ -66,15 +66,6 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
     }
 
     /**
-     * Check if this duct is an impulse variant.
-     * Impulse ducts provide faster extraction and travel speeds (4x multiplier).
-     */
-    public boolean isImpulse() {
-        var registryName = getBlockState().getBlock().builtInRegistryHolder().key().location();
-        return registryName.getPath().contains("impulse");
-    }
-
-    /**
      * Check if this duct is a dense variant.
      * Dense ducts add +1000 to path weight, making them lowest priority (overflow only).
      */
@@ -90,14 +81,6 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
     public boolean isVacuum() {
         var registryName = getBlockState().getBlock().builtInRegistryHolder().key().location();
         return registryName.getPath().contains("vacuum");
-    }
-
-    /**
-     * Get the speed multiplier for this duct type.
-     * @return 4.0f for impulse ducts, 1.0f for regular ducts
-     */
-    public float getSpeedMultiplier() {
-        return isImpulse() ? 4.0f : 1.0f;
     }
 
     @Override
@@ -218,18 +201,21 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
         double totalDistance = item.getTotalDistance();
         double currentDistance = item.distanceTraveled;
         double progress = Math.min(1.0, currentDistance / totalDistance);
-        
-        if (item.path.size() <= 1) {
+
+        // Use SAME logic for ALL items (forward and returning)
+        // After reverse(): origin=chest, destination=servo, path=reversed
+        // The math works identically - just different positions
+        if (item.path.isEmpty()) {
             // Direct connection - interpolate between origin and destination
             Vec3 origin = Vec3.atCenterOf(item.origin);
             Vec3 destination = Vec3.atCenterOf(item.destination);
             return origin.lerp(destination, progress);
         }
-        
+
         // Multi-segment path - calculate position along the full path
         return calculatePositionAlongPath(item, progress);
     }
-    
+
     private Vec3 calculatePositionAlongPath(ItemGrid.ItemInTransit item, double progress) {
         // Calculate cumulative distances for each path segment
         double totalDistance = item.getTotalDistance();
@@ -284,17 +270,25 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
      * Uses the item's calculated position to determine if it's within this duct's bounds.
      */
     private boolean isDuctOnItemPath(ItemGrid.ItemInTransit item) {
-        // First check explicit positions (origin, destination, path)
-        boolean isOrigin = worldPosition.equals(item.origin);
-        boolean isDestination = worldPosition.equals(item.destination);
-        if (isOrigin || isDestination) {
-            return true;
-        }
+        // For returning items, origin is an external block (not a duct) and destination is the servo duct
+        // For forward items, origin is servo duct and destination is external block
+        // We check path nodes and destination for returning, or origin and path for forward
 
+        // Check if this duct is explicitly in the path
         for (BlockPos pathPos : item.path) {
             if (worldPosition.equals(pathPos)) {
                 return true;
             }
+        }
+
+        // Check destination (servo duct for returning items)
+        if (worldPosition.equals(item.destination)) {
+            return true;
+        }
+
+        // Check origin (servo duct for forward items)
+        if (worldPosition.equals(item.origin)) {
+            return true;
         }
 
         // If not explicitly in path, check if item's calculated position is within this duct
@@ -321,13 +315,14 @@ public class ItemDuctBlockEntity extends DuctBlockEntity<ItemGrid, ItemGridNode>
 
     /**
      * Calculate the velocity vector for an item (direction it's traveling)
+     * Uses SAME logic for ALL items (forward and returning)
      */
     private Vec3 calculateItemVelocity(ItemGrid.ItemInTransit item) {
         double totalDistance = item.getTotalDistance();
         double currentDistance = item.distanceTraveled;
         double progress = Math.min(1.0, currentDistance / totalDistance);
 
-        // Build waypoints list
+        // Build waypoints list: origin -> path nodes -> destination
         List<Vec3> waypoints = new ArrayList<>();
         waypoints.add(Vec3.atCenterOf(item.origin));
         for (BlockPos pathPos : item.path) {

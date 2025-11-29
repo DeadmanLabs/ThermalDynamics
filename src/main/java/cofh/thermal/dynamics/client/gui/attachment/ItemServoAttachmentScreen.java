@@ -71,8 +71,8 @@ public class ItemServoAttachmentScreen extends ContainerScreenCoFH<ItemServoAtta
 
     // region ELEMENTS
     protected void addButtons() {
-        // Increment transfer amount button
-        addElement(new ElementButton(this, 130, 46) {
+        // Increment transfer amount button (below the count display, left)
+        addElement(new ElementButton(this, 137, 60) {
             @Override
             public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
                 menu.incrementTransferAmount();
@@ -81,12 +81,12 @@ public class ItemServoAttachmentScreen extends ContainerScreenCoFH<ItemServoAtta
             }
         }
                 .setSize(12, 12)
-                .setTexture(TEX_INCREMENT, 24, 12)
+                .setTexture(TEX_INCREMENT, 36, 12)
                 .setTooltipFactory(new SimpleTooltip(Component.translatable("info.thermal.increment_transfer")))
                 .setVisible(() -> menu.getTransferAmount() < menu.getMaxTransferAmount()));
 
-        // Decrement transfer amount button
-        addElement(new ElementButton(this, 130, 58) {
+        // Decrement transfer amount button (below the count display, right)
+        addElement(new ElementButton(this, 151, 60) {
             @Override
             public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
                 menu.decrementTransferAmount();
@@ -95,7 +95,7 @@ public class ItemServoAttachmentScreen extends ContainerScreenCoFH<ItemServoAtta
             }
         }
                 .setSize(12, 12)
-                .setTexture(TEX_DECREMENT, 24, 12)
+                .setTexture(TEX_DECREMENT, 36, 12)
                 .setTooltipFactory(new SimpleTooltip(Component.translatable("info.thermal.decrement_transfer")))
                 .setVisible(() -> menu.getTransferAmount() > menu.getMinTransferAmount()));
 

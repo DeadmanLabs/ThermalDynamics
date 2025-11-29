@@ -54,28 +54,6 @@ public class TDynBlockEntities {
     public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_VACUUM_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_VACUUM, true, () -> BLOCKS.get(ID_ITEM_DUCT_VACUUM));
     public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_VACUUM_OPAQUE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_VACUUM_OPAQUE, false, () -> BLOCKS.get(ID_ITEM_DUCT_VACUUM_OPAQUE));
 
-    // Item Duct Impulse Variants
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_IMPULSE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_IMPULSE, true, () -> BLOCKS.get(ID_ITEM_DUCT_IMPULSE));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_IMPULSE_OPAQUE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_IMPULSE_OPAQUE, false, () -> BLOCKS.get(ID_ITEM_DUCT_IMPULSE_OPAQUE));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_IMPULSE_DENSE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_IMPULSE_DENSE, true, () -> BLOCKS.get(ID_ITEM_DUCT_IMPULSE_DENSE));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_IMPULSE_DENSE_OPAQUE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_IMPULSE_DENSE_OPAQUE, false, () -> BLOCKS.get(ID_ITEM_DUCT_IMPULSE_DENSE_OPAQUE));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_IMPULSE_VACUUM_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_IMPULSE_VACUUM, true, () -> BLOCKS.get(ID_ITEM_DUCT_IMPULSE_VACUUM));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_IMPULSE_VACUUM_OPAQUE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_IMPULSE_VACUUM_OPAQUE, false, () -> BLOCKS.get(ID_ITEM_DUCT_IMPULSE_VACUUM_OPAQUE));
-
-    // Item Duct Signalum Variants
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_SIGNALUM_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_SIGNALUM, true, () -> BLOCKS.get(ID_ITEM_DUCT_SIGNALUM));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_SIGNALUM_OPAQUE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_SIGNALUM_OPAQUE, false, () -> BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_OPAQUE));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_SIGNALUM_DENSE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_SIGNALUM_DENSE, true, () -> BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_DENSE));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_SIGNALUM_DENSE_OPAQUE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_SIGNALUM_DENSE_OPAQUE, false, () -> BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_DENSE_OPAQUE));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_SIGNALUM_VACUUM_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_SIGNALUM_VACUUM, true, () -> BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_VACUUM));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_SIGNALUM_VACUUM_OPAQUE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_SIGNALUM_VACUUM_OPAQUE, false, () -> BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_VACUUM_OPAQUE));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_SIGNALUM_IMPULSE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_SIGNALUM_IMPULSE, true, () -> BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_SIGNALUM_IMPULSE_OPAQUE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_SIGNALUM_IMPULSE_OPAQUE, false, () -> BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_OPAQUE));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_SIGNALUM_IMPULSE_DENSE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE, true, () -> BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_SIGNALUM_IMPULSE_DENSE_OPAQUE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE_OPAQUE, false, () -> BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE_OPAQUE));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM, true, () -> BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM));
-    public static final RegistryObject<BlockEntityType<?>> ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM_OPAQUE_BLOCK_ENTITY = registerItemDuct(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM_OPAQUE, false, () -> BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM_OPAQUE));
-
     //        TILE_ENTITIES.register(ID_ENERGY_DISTRIBUTOR, () -> TileEntityType.Builder.of(EnergyDistributorTile::new, ENERGY_DISTRIBUTOR_BLOCK).build(null));
 
     public static final RegistryObject<BlockEntityType<?>> ITEM_BUFFER_BLOCK_ENTITY = BLOCK_ENTITIES.register(ID_ITEM_BUFFER, () -> BlockEntityType.Builder.of(ItemBufferBlockEntity::new, BLOCKS.get(ID_ITEM_BUFFER)).build(null));

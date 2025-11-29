@@ -28,28 +28,6 @@ public class TDynIDs {
     public static final String ID_ITEM_DUCT_VACUUM = "item_duct_vacuum";
     public static final String ID_ITEM_DUCT_VACUUM_OPAQUE = "item_duct_vacuum_opaque";
 
-    // Item Duct Impulse Variants
-    public static final String ID_ITEM_DUCT_IMPULSE = "item_duct_impulse";
-    public static final String ID_ITEM_DUCT_IMPULSE_OPAQUE = "item_duct_impulse_opaque";
-    public static final String ID_ITEM_DUCT_IMPULSE_DENSE = "item_duct_impulse_dense";
-    public static final String ID_ITEM_DUCT_IMPULSE_DENSE_OPAQUE = "item_duct_impulse_dense_opaque";
-    public static final String ID_ITEM_DUCT_IMPULSE_VACUUM = "item_duct_impulse_vacuum";
-    public static final String ID_ITEM_DUCT_IMPULSE_VACUUM_OPAQUE = "item_duct_impulse_vacuum_opaque";
-
-    // Item Duct Signalum Plated Variants
-    public static final String ID_ITEM_DUCT_SIGNALUM = "item_duct_signalum";
-    public static final String ID_ITEM_DUCT_SIGNALUM_OPAQUE = "item_duct_signalum_opaque";
-    public static final String ID_ITEM_DUCT_SIGNALUM_DENSE = "item_duct_signalum_dense";
-    public static final String ID_ITEM_DUCT_SIGNALUM_DENSE_OPAQUE = "item_duct_signalum_dense_opaque";
-    public static final String ID_ITEM_DUCT_SIGNALUM_VACUUM = "item_duct_signalum_vacuum";
-    public static final String ID_ITEM_DUCT_SIGNALUM_VACUUM_OPAQUE = "item_duct_signalum_vacuum_opaque";
-    public static final String ID_ITEM_DUCT_SIGNALUM_IMPULSE = "item_duct_signalum_impulse";
-    public static final String ID_ITEM_DUCT_SIGNALUM_IMPULSE_OPAQUE = "item_duct_signalum_impulse_opaque";
-    public static final String ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE = "item_duct_signalum_impulse_dense";
-    public static final String ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE_OPAQUE = "item_duct_signalum_impulse_dense_opaque";
-    public static final String ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM = "item_duct_signalum_impulse_vacuum";
-    public static final String ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM_OPAQUE = "item_duct_signalum_impulse_vacuum_opaque";
-
     public static final String ID_ENERGY_DISTRIBUTOR = "energy_distributor";
 
     public static final String ID_ENERGY_BUFFER = "energy_buffer";

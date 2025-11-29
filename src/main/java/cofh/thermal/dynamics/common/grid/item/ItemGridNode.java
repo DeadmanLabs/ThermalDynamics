@@ -164,7 +164,6 @@ public class ItemGridNode extends GridNode<ItemGrid> implements ITickableGridNod
                 }
             }
         }
-        
     }
 
     public boolean canExtractItem(Direction from) {

@@ -4,7 +4,6 @@ import cofh.core.util.filter.BaseItemFilter;
 import cofh.core.util.filter.IFilter;
 import cofh.lib.api.IConveyableData;
 import cofh.thermal.dynamics.api.grid.IDuct;
-import cofh.thermal.dynamics.common.block.entity.duct.ItemDuctBlockEntity;
 import cofh.thermal.dynamics.common.inventory.attachment.ItemServoAttachmentMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -24,6 +23,8 @@ import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemStackHandler;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -34,13 +35,17 @@ import java.util.function.Predicate;
 import static cofh.lib.util.constants.NBTTags.TAG_AMOUNT;
 import static cofh.lib.util.constants.NBTTags.TAG_TYPE;
 import static cofh.thermal.core.ThermalCore.ITEMS;
-import static cofh.thermal.dynamics.client.TDynTextures.SERVO_ATTACHMENT_ACTIVE_LOC;
-import static cofh.thermal.dynamics.client.TDynTextures.SERVO_ATTACHMENT_LOC;
-import static cofh.thermal.dynamics.client.TDynTextures.SERVO_ATTACHMENT_OVERFLOW_LOC;
+import static cofh.thermal.dynamics.client.TDynTextures.*;
 import static cofh.thermal.dynamics.init.registries.TDynIDs.ID_SERVO_ATTACHMENT;
 import static cofh.thermal.dynamics.init.registries.TDynIDs.SERVO;
 
 public class ItemServoAttachment implements IFilterableAttachment, IRedstoneControllableAttachment, IConveyableData, MenuProvider {
+
+    private static final Logger LOGGER = LogManager.getLogger();
+
+    // NBT tag constants
+    private static final String TAG_EXTRACTION_COOLDOWN = "ExtractionCooldown";
+    private static final String TAG_OVERFLOW_STORAGE = "OverflowStorage";
 
     public static final Component DISPLAY_NAME = Component.translatable("attachment.thermal.item_servo");
 
@@ -53,8 +58,7 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
 
     public int amountTransfer = DEFAULT_TRANSFER;
 
-    // Extraction timing - base interval for normal ducts (200 ticks = 10 seconds = 6 extractions/min)
-    // Impulse ducts use 1/4 of this (50 ticks = 2.5 seconds = 24 extractions/min)
+    // Extraction timing - base interval (200 ticks = 10 seconds = 6 extractions/min)
     protected int extractionCooldown = 0;
     protected static final int BASE_EXTRACTION_INTERVAL = 200; // 10 seconds at 20 TPS (6/min)
 
@@ -81,7 +85,7 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     }
     
     public void setTransfer(int amount) {
-        amountTransfer = Math.max(MIN_TRANSFER, Math.min(MAX_TRANSFER, amount));
+        amountTransfer = Math.max(getMinTransfer(), Math.min(getMaxTransfer(), amount));
     }
     
     public void incrementTransfer() {
@@ -101,16 +105,11 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     }
 
     /**
-     * Get the extraction interval based on the attached duct type.
-     * Impulse ducts provide 4x faster extraction rate.
-     * @return Ticks between extractions (200 for normal, 50 for impulse)
+     * Get the extraction interval.
+     * @return Ticks between extractions (200 ticks = 6/min)
      */
     protected int getExtractionInterval() {
-        // Check if attached to impulse duct
-        if (duct instanceof ItemDuctBlockEntity itemDuct && itemDuct.isImpulse()) {
-            return BASE_EXTRACTION_INTERVAL / 4;  // 50 ticks for impulse (24/min)
-        }
-        return BASE_EXTRACTION_INTERVAL;  // 200 ticks for normal (6/min)
+        return BASE_EXTRACTION_INTERVAL;
     }
 
     public ItemStackHandler getOverflowStorage() {
@@ -139,14 +138,14 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
             return this;
         }
         amountTransfer = nbt.getInt(TAG_AMOUNT);
-        extractionCooldown = nbt.getInt("ExtractionCooldown");
+        extractionCooldown = nbt.getInt(TAG_EXTRACTION_COOLDOWN);
 
         filter.read(nbt);
         rsControl.read(nbt);
 
         // Read overflow storage
-        if (nbt.contains("OverflowStorage")) {
-            overflowStorage.deserializeNBT(nbt.getCompound("OverflowStorage"));
+        if (nbt.contains(TAG_OVERFLOW_STORAGE)) {
+            overflowStorage.deserializeNBT(nbt.getCompound(TAG_OVERFLOW_STORAGE));
         }
 
         return this;
@@ -156,13 +155,13 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
     public CompoundTag write(CompoundTag nbt) {
         nbt.putString(TAG_TYPE, SERVO);
         nbt.putInt(TAG_AMOUNT, amountTransfer);
-        nbt.putInt("ExtractionCooldown", extractionCooldown);
+        nbt.putInt(TAG_EXTRACTION_COOLDOWN, extractionCooldown);
 
         filter.write(nbt);
         rsControl.write(nbt);
 
         // Write overflow storage
-        nbt.put("OverflowStorage", overflowStorage.serializeNBT());
+        nbt.put(TAG_OVERFLOW_STORAGE, overflowStorage.serializeNBT());
 
         return nbt;
     }
@@ -248,10 +247,10 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
                 }
             }
         } catch (Exception e) {
-            // Silent failure for performance
+            // Silently ignore - overflow will retry next tick
         }
     }
-    
+
     private void extractAndRouteItems() {
         try {
             // Get connected external inventory
@@ -324,15 +323,15 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
                     remainingToExtract -= extracted.getCount();
                     
                 } catch (Exception e) {
-                    // Silent failure for performance
+                    // Silently ignore slot - try next slot
                 }
             }
-            
+
         } catch (Exception e) {
-            // Silent failure for performance
+            // Silently ignore - will retry next tick
         }
     }
-    
+
     private LazyOptional<IItemHandler> getExternalCapability() {
         // Always get the raw capability directly from the tile, don't use cached wrapped version
         BlockEntity tile = world().getBlockEntity(pos().relative(side));
@@ -346,12 +345,26 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
 
 
     /**
-     * Store an overflow item in the servo's buffer (infinite storage)
+     * Store an overflow item in the servo's buffer.
+     * <p>
+     * This method handles items that were in transit but couldn't be delivered
+     * (destination became unavailable). The servo acts as a "safety net" to
+     * prevent item loss when network topology changes during transit.
+     * <p>
+     * Design note: When the 9-slot buffer is full, items are stacked in the last
+     * slot regardless of type. This "infinite storage" behavior prioritizes
+     * preventing item loss over clean storage organization. Items can exceed
+     * normal stack limits in this overflow state.
+     * <p>
+     * The servo will attempt to reinject these items when valid paths become
+     * available (see tryReinjectOverflow).
+     *
+     * @param stack The item stack to store in overflow
      */
     public void storeOverflowItem(ItemStack stack) {
         if (stack.isEmpty()) return;
 
-        // Try to store in existing slots first
+        // Try to store in existing slots first (normal storage behavior)
         for (int slot = 0; slot < overflowStorage.getSlots(); slot++) {
             stack = overflowStorage.insertItem(slot, stack, false);
             if (stack.isEmpty()) {
@@ -359,8 +372,8 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
             }
         }
 
-        // If storage is full, expand it by creating additional virtual storage
-        // For simplicity, we'll just force it into the last slot (infinite storage)
+        // Emergency overflow: force into last slot to prevent item loss
+        // This can result in mixed item types and stacks exceeding normal limits
         if (!stack.isEmpty()) {
             int lastSlot = overflowStorage.getSlots() - 1;
             ItemStack existing = overflowStorage.getStackInSlot(lastSlot);
@@ -369,7 +382,9 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
             } else if (ItemStack.isSameItemSameTags(existing, stack)) {
                 existing.grow(stack.getCount());
             } else {
-                // Force storage in last slot regardless of item type (overflow behavior)
+                // Different item type - replace (original item is lost)
+                // TODO: Consider dropping replaced items as entities
+                LOGGER.warn("Overflow buffer full at {}, replacing {} with {}", pos(), existing, stack);
                 overflowStorage.setStackInSlot(lastSlot, stack);
             }
         }
@@ -416,11 +431,13 @@ public class ItemServoAttachment implements IFilterableAttachment, IRedstoneCont
 
     @Override
     public ResourceLocation getTexture() {
-        // Show overflow texture (red) when servo has overflow items
-        if (isOverflowing()) {
-            return SERVO_ATTACHMENT_OVERFLOW_LOC;
+        boolean active = rsControl.getState();
+        boolean overflow = isOverflowing();
+
+        if (overflow) {
+            return active ? SERVO_ATTACHMENT_ACTIVE_OVERFLOW_LOC : SERVO_ATTACHMENT_OVERFLOW_LOC;
         }
-        return rsControl.getState() ? SERVO_ATTACHMENT_ACTIVE_LOC : SERVO_ATTACHMENT_LOC;
+        return active ? SERVO_ATTACHMENT_ACTIVE_LOC : SERVO_ATTACHMENT_LOC;
     }
 
     @Override

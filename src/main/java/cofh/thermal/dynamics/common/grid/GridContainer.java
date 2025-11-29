@@ -74,10 +74,8 @@ public class GridContainer implements IGridContainer, INBTSerializable<ListTag> 
     private <G extends Grid<G, N>, N extends GridNode<G>> void gridHostPlaced(IDuct<G, N> host, @Nullable Direction connectionPreference) {
 
         // New Grid.
-        System.out.println("GridContainer: gridHostPlaced for " + host.getClass().getSimpleName() + " at " + host.getHostPos());
         constructNewGrid(host);
         EnumMap<Direction, IDuct<G, N>> adjacentGrids = getAdjacentGrids(host);
-        System.out.println("GridContainer: Found " + adjacentGrids.size() + " adjacent grids for " + host.getHostPos());
         if (adjacentGrids.isEmpty()) {
             return;
         }
@@ -123,14 +121,12 @@ public class GridContainer implements IGridContainer, INBTSerializable<ListTag> 
         if (DEBUG) {
             LOGGER.info("Constructing new grid for {}", host.getHostPos());
         }
-        System.out.println("GridContainer: constructNewGrid for " + host.getClass().getSimpleName() + " at " + host.getHostPos());
         G grid = createAndAddGrid(nextUUID(), host.getGridType(), true);
         host.setGrid(grid);
         grid.newNode(host.getHostPos());
         addGridLookup(grid, host.getHostPos());
         grid.onGridHostAdded(host);
         grid.onModified();
-        System.out.println("GridContainer: Grid created and assigned: " + grid.getClass().getSimpleName() + " with " + grid.getNodes().size() + " nodes");
     }
 
     private <G extends Grid<G, N>, N extends GridNode<G>> void mergeGrids(List<IDuct<G, N>> branches) {

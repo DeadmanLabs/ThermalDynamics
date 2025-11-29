@@ -162,16 +162,11 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
                     }
                     return InteractionResult.CONSUME;
                 } else if (heldStack.getItem() instanceof AttachmentItem attachmentItem) {
-                    System.out.println("DuctBlock: AttachmentItem detected - " + attachmentItem.getAttachmentType(heldStack));
                     if (Utils.isClientWorld(worldIn)) {
-                        System.out.println("DuctBlock: Client world, returning SUCCESS");
                         return InteractionResult.SUCCESS;
                     }
-                    System.out.println("DuctBlock: Server world, subHit=" + advHit.subHit + " direction=" + advHit.getDirection());
                     if (advHit.subHit == 0) {
-                        System.out.println("DuctBlock: Attempting to install attachment on center (direction=" + advHit.getDirection() + ")");
                         boolean success = duct.attemptAttachmentInstall(advHit.getDirection(), player, attachmentItem.getAttachmentType(heldStack));
-                        System.out.println("DuctBlock: Installation result: " + success);
                         if (success) {
                             if (!player.getAbilities().instabuild) {
                                 player.setItemInHand(handIn, consumeItem(heldStack, 1));
@@ -182,9 +177,7 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
                         return InteractionResult.SUCCESS;
                     } else if (advHit.subHit >= 7) {
                         Direction installSide = DIRECTIONS[advHit.subHit - 7];
-                        System.out.println("DuctBlock: Attempting to install attachment on external connection (direction=" + installSide + ")");
                         boolean success = duct.attemptAttachmentInstall(installSide, player, attachmentItem.getAttachmentType(heldStack));
-                        System.out.println("DuctBlock: Installation result: " + success);
                         if (success) {
                             if (!player.getAbilities().instabuild) {
                                 player.setItemInHand(handIn, consumeItem(heldStack, 1));
@@ -198,19 +191,15 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
             } else if (rawHit instanceof BlockHitResult basicHit) {
                 // Server-side fallback for attachments when detailed raytrace isn't available
                 if (heldStack.getItem() instanceof AttachmentItem attachmentItem) {
-                    System.out.println("DuctBlock: Server-side fallback for AttachmentItem - " + attachmentItem.getAttachmentType(heldStack));
                     if (!Utils.isClientWorld(worldIn)) {
                         // Find any external connection to a storage block
                         duct.calcDuctModelDataServer();
                         DuctModelData modelData = duct.getDuctModelData();
-                        System.out.println("DuctBlock: ModelData calculated, checking external connections...");
-                        
+
                         for (Direction dir : DIRECTIONS) {
                             // External connection without internal connection = connection to storage block
                             if (modelData.hasExternalConnection(dir) && !modelData.hasInternalConnection(dir)) {
-                                System.out.println("DuctBlock: Found storage block connection on " + dir + ", attempting installation...");
                                 boolean success = duct.attemptAttachmentInstall(dir, player, attachmentItem.getAttachmentType(heldStack));
-                                System.out.println("DuctBlock: Storage block installation result: " + success);
                                 if (success) {
                                     if (!player.getAbilities().instabuild) {
                                         player.setItemInHand(handIn, consumeItem(heldStack, 1));
@@ -221,14 +210,11 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
                                 return InteractionResult.SUCCESS;
                             }
                         }
-                        
-                        System.out.println("DuctBlock: No storage block connections found, trying any external connection...");
+
                         // If no storage block connections found, try any external connection
                         for (Direction dir : DIRECTIONS) {
                             if (modelData.hasExternalConnection(dir)) {
-                                System.out.println("DuctBlock: Found external connection on " + dir + ", attempting installation...");
                                 boolean success = duct.attemptAttachmentInstall(dir, player, attachmentItem.getAttachmentType(heldStack));
-                                System.out.println("DuctBlock: External connection installation result: " + success);
                                 if (success) {
                                     if (!player.getAbilities().instabuild) {
                                         player.setItemInHand(handIn, consumeItem(heldStack, 1));
@@ -239,14 +225,11 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
                                 return InteractionResult.SUCCESS;
                             }
                         }
-                        
-                        System.out.println("DuctBlock: No external connections found, allowing attachment on any side for non-connection ducts...");
+
                         // If no external connections, allow attachment on any side (for ducts in middle of networks)
                         // Try each direction until we find one that works
                         for (Direction dir : DIRECTIONS) {
-                            System.out.println("DuctBlock: Trying installation on " + dir + " (fallback mode)...");
                             boolean success = duct.attemptAttachmentInstall(dir, player, attachmentItem.getAttachmentType(heldStack));
-                            System.out.println("DuctBlock: Fallback installation result on " + dir + ": " + success);
                             if (success) {
                                 if (!player.getAbilities().instabuild) {
                                     player.setItemInHand(handIn, consumeItem(heldStack, 1));
@@ -254,7 +237,6 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
                                 return InteractionResult.SUCCESS;
                             }
                         }
-                        System.out.println("DuctBlock: All installation attempts failed");
                     }
                 }
             }
@@ -291,13 +273,10 @@ public class DuctBlock extends Block implements EntityBlock, SimpleWaterloggedBl
             return;
         }
         BlockEntity tile = worldIn.getBlockEntity(pos);
-        System.out.println("DuctBlock: onPlace at " + pos + " - tile=" + (tile != null ? tile.getClass().getSimpleName() : "null"));
         if (tile instanceof IDuct<?, ?> host && !host.hasGrid()) {
             IGridContainer gridContainer = IGridContainer.getCapability(worldIn);
-            System.out.println("DuctBlock: gridContainer=" + (gridContainer != null ? "found" : "null") + ", hasGrid=" + host.hasGrid());
             if (gridContainer != null) {
                 gridContainer.onDuctPlaced(host, null);
-                System.out.println("DuctBlock: Called onDuctPlaced for " + host.getClass().getSimpleName() + " at " + pos);
             }
         }
     }

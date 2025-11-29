@@ -156,15 +156,6 @@ public class ThermalDynamics {
         ItemBlockRenderTypes.setRenderLayer(BLOCKS.get(ID_ITEM_DUCT), cutout);
         ItemBlockRenderTypes.setRenderLayer(BLOCKS.get(ID_ITEM_DUCT_DENSE), cutout);
         ItemBlockRenderTypes.setRenderLayer(BLOCKS.get(ID_ITEM_DUCT_VACUUM), cutout);
-        ItemBlockRenderTypes.setRenderLayer(BLOCKS.get(ID_ITEM_DUCT_IMPULSE), cutout);
-        ItemBlockRenderTypes.setRenderLayer(BLOCKS.get(ID_ITEM_DUCT_IMPULSE_DENSE), cutout);
-        ItemBlockRenderTypes.setRenderLayer(BLOCKS.get(ID_ITEM_DUCT_IMPULSE_VACUUM), cutout);
-        ItemBlockRenderTypes.setRenderLayer(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM), cutout);
-        ItemBlockRenderTypes.setRenderLayer(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_DENSE), cutout);
-        ItemBlockRenderTypes.setRenderLayer(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_VACUUM), cutout);
-        ItemBlockRenderTypes.setRenderLayer(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE), cutout);
-        ItemBlockRenderTypes.setRenderLayer(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE), cutout);
-        ItemBlockRenderTypes.setRenderLayer(BLOCKS.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM), cutout);
     }
     // endregion
 }

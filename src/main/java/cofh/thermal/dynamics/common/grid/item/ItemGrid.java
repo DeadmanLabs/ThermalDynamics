@@ -15,14 +15,10 @@ import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.items.IItemHandler;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static cofh.thermal.dynamics.init.registries.TDynGrids.ITEM_GRID;
 
@@ -32,28 +28,28 @@ import static cofh.thermal.dynamics.init.registries.TDynGrids.ITEM_GRID;
  */
 public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
 
-    private static final Logger LOGGER = LogManager.getLogger();
-    
     // Track active grids for client-side rendering
-    private static final Map<Level, Set<ItemGrid>> activeGrids = new ConcurrentHashMap<>();
+    private static final Map<Level, Set<ItemGrid>> activeGrids = new HashMap<>();
     
-    // Travel speed constants (blocks per tick)
+    // Travel speed constant (blocks per tick)
     // Normal ducts: 0.05 = 1 block per second at 20 TPS
-    // Impulse ducts: 0.20 = 4 blocks per second at 20 TPS (4x faster)
     private static final float NORMAL_ITEM_SPEED = 0.05f;
-    private static final float IMPULSE_ITEM_SPEED = 0.20f;
 
     // Epsilon for float comparison to handle precision issues after deserialization
     private static final float DISTANCE_EPSILON = 0.001f;
 
-    // Queue for items in transit - using concurrent queue for thread safety
-    private final Queue<ItemInTransit> itemsInTransit = new ConcurrentLinkedQueue<>();
+    // NBT tag constants
+    private static final String TAG_ITEMS_IN_TRANSIT = "itemsInTransit";
+    private static final String TAG_RETURNING_ITEMS = "returningItems";
+
+    // Queue for items in transit (grid operations are single-threaded on server tick)
+    private final Queue<ItemInTransit> itemsInTransit = new LinkedList<>();
 
     // Items that need to be returned due to backup
-    private final Queue<ItemInTransit> returningItems = new ConcurrentLinkedQueue<>();
+    private final Queue<ItemInTransit> returningItems = new LinkedList<>();
 
     // Track items in transit to destinations for capacity calculation
-    private final Map<BlockPos, Map<Direction, Integer>> itemsInTransitToDestination = new ConcurrentHashMap<>();
+    private final Map<BlockPos, Map<Direction, Integer>> itemsInTransitToDestination = new HashMap<>();
 
     /**
      * Topology version when items were last checked for path validity.
@@ -64,8 +60,8 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     public ItemGrid(UUID id, Level world) {
         super(ITEM_GRID.get(), id, world);
         
-        // Register this grid for client-side rendering (both server and client)
-        activeGrids.computeIfAbsent(world, k -> ConcurrentHashMap.newKeySet()).add(this);
+        // Register this grid for rendering lookups
+        activeGrids.computeIfAbsent(world, k -> new HashSet<>()).add(this);
         // Grid registered for item transport
     }
     
@@ -156,16 +152,12 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
      * If both paths are broken, item is dropped as entity.
      */
     private void handleTopologyChange() {
-        LOGGER.info("handleTopologyChange called - checking {} items in transit", itemsInTransit.size());
-
         Iterator<ItemInTransit> iterator = itemsInTransit.iterator();
         while (iterator.hasNext()) {
             ItemInTransit item = iterator.next();
 
             // Check if the item's forward path (to destination) is still valid
             boolean forwardPathValid = isPathValid(item);
-            LOGGER.info("  Item {} forward path valid: {} (origin={}, dest={}, path={})",
-                item.stack, forwardPathValid, item.origin, item.destination, item.path);
 
             if (forwardPathValid) {
                 // Forward path is fine - item continues to destination
@@ -174,11 +166,9 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
 
             // Forward path is broken - check if we can return to origin
             boolean returnPathValid = canReturnToOrigin(item);
-            LOGGER.info("  Forward path broken - return path valid: {}", returnPathValid);
 
             if (!returnPathValid) {
                 // Both paths broken - drop item as entity at current position
-                LOGGER.info("  Both paths broken - dropping {} as entity", item.stack);
                 dropItemAsEntity(item);
                 removeItemFromTransitTracking(item);
                 iterator.remove();
@@ -186,15 +176,12 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             }
 
             // Return path is valid - initiate backflow to origin
-            LOGGER.info("  Initiating backflow for {} to origin {}", item.stack, item.origin);
-
             // reverse() now preserves position - don't reset distanceTraveled after
             item.reverse();
 
             // After reverse: item.destination is now the servo duct position
             // Double-check it still exists (should be true since canReturnToOrigin passed)
             if (!getNodes().containsKey(item.destination)) {
-                LOGGER.warn("  Destination (servo) {} no longer in grid after reverse - dropping as entity", item.destination);
                 dropItemAsEntity(item);
                 removeItemFromTransitTracking(item);
                 iterator.remove();
@@ -214,7 +201,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
                 }
             }
             item.path = validPath;
-            LOGGER.info("  Filtered path to {} valid positions: {}", validPath.size(), validPath);
 
             removeItemFromTransitTracking(item);
             returningItems.add(item);
@@ -238,13 +224,11 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         // Check if destination still exists and has item handler
         BlockEntity destTile = world.getBlockEntity(item.destination);
         if (destTile == null) {
-            LOGGER.info("Path invalid: destination {} has no tile entity", item.destination);
             return false;
         }
 
         // Check if the destination can still accept items
         if (!destTile.getCapability(ForgeCapabilities.ITEM_HANDLER, item.destinationSide).isPresent()) {
-            LOGGER.info("Path invalid: destination {} has no item handler on side {}", item.destination, item.destinationSide);
             return false;
         }
 
@@ -278,8 +262,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         for (int i = currentSegmentIndex + 1; i < fullPath.size() - 1; i++) {
             BlockPos pathPos = fullPath.get(i);
             if (!getNodes().containsKey(pathPos)) {
-                LOGGER.info("Path invalid: AHEAD path position {} not in grid nodes (item at segment {})",
-                    pathPos, currentSegmentIndex);
                 return false;
             }
         }
@@ -318,7 +300,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     private boolean isReturnPathValid(ItemInTransit item) {
         // Check if destination (the servo duct we're returning to) still exists in grid
         if (!getNodes().containsKey(item.destination)) {
-            LOGGER.info("  Return path invalid: destination {} not in nodes", item.destination);
             return false;
         }
 
@@ -339,7 +320,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     private boolean canReturnToOrigin(ItemInTransit item) {
         // First check if origin (servo duct) still exists in our grid
         if (!getNodes().containsKey(item.origin)) {
-            LOGGER.info("  Cannot return: origin {} not in grid nodes", item.origin);
             return false;
         }
 
@@ -372,8 +352,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         for (int i = 1; i <= currentSegmentIndex && i < fullPath.size() - 1; i++) {
             BlockPos pathPos = fullPath.get(i);
             if (!getNodes().containsKey(pathPos)) {
-                LOGGER.info("  Cannot return: BEHIND path position {} not in grid nodes (item at segment {})",
-                    pathPos, currentSegmentIndex);
                 return false;
             }
         }
@@ -391,15 +369,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         // Calculate current world position based on progress through path
         net.minecraft.world.phys.Vec3 pos = calculateItemWorldPosition(item);
 
-        LOGGER.info("=== DROPPING ITEM AS ENTITY ===");
-        LOGGER.info("  Item: {}", item.stack);
-        LOGGER.info("  Drop position: ({}, {}, {})", pos.x, pos.y, pos.z);
-        LOGGER.info("  Item origin: {}", item.origin);
-        LOGGER.info("  Item destination: {}", item.destination);
-        LOGGER.info("  Item path: {}", item.path);
-        LOGGER.info("  Distance traveled: {} / total: {}", item.distanceTraveled, item.getTotalDistance());
-        LOGGER.info("  Returning flag: {}", item.returning);
-
         net.minecraft.world.entity.item.ItemEntity entity = new net.minecraft.world.entity.item.ItemEntity(
             world, pos.x, pos.y, pos.z, item.stack
         );
@@ -408,8 +377,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         // Prevent pickup delay so player can grab it immediately
         entity.setPickUpDelay(10);
         world.addFreshEntity(entity);
-
-        LOGGER.info("  Entity spawned at world position: ({}, {}, {})", entity.getX(), entity.getY(), entity.getZ());
     }
 
     /**
@@ -537,18 +504,10 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
 
     /**
      * Get the item travel speed at a specific duct position.
-     * Impulse ducts provide 4x faster travel speed.
      * @param pos The BlockPos to check
-     * @return IMPULSE_ITEM_SPEED if impulse duct, otherwise NORMAL_ITEM_SPEED
+     * @return NORMAL_ITEM_SPEED for all duct types
      */
     private float getSpeedAtPosition(BlockPos pos) {
-        ItemGridNode node = getNodes().get(pos);
-        if (node != null) {
-            IDuct<?, ?> duct = node.getDuct();
-            if (duct instanceof ItemDuctBlockEntity itemDuct && itemDuct.isImpulse()) {
-                return IMPULSE_ITEM_SPEED;
-            }
-        }
         return NORMAL_ITEM_SPEED;
     }
 
@@ -590,10 +549,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     }
 
     private void processReturningItems() {
-        if (!returningItems.isEmpty()) {
-            LOGGER.info("processReturningItems: {} items returning", returningItems.size());
-        }
-
         Iterator<ItemInTransit> iterator = returningItems.iterator();
         while (iterator.hasNext()) {
             ItemInTransit item = iterator.next();
@@ -602,7 +557,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             boolean returnPathValid = isReturnPathValid(item);
             if (!returnPathValid) {
                 // Both destination AND return path broken - drop item as entity
-                LOGGER.info("Return path invalid for {} - dropping as entity", item.stack);
                 dropItemAsEntity(item);
                 iterator.remove();
                 continue;
@@ -610,7 +564,7 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
 
             double totalDistance = item.getTotalDistance();
 
-            // Calculate speed based on current duct type (impulse ducts are 4x faster)
+            // Calculate speed based on current duct type
             BlockPos currentDuct = getCurrentDuctPosition(item);
             float speed = getSpeedAtPosition(currentDuct);
 
@@ -620,7 +574,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             // Check if item reached origin (use epsilon for float precision tolerance)
             if (item.distanceTraveled >= totalDistance - DISTANCE_EPSILON) {
                 // Store in original servo's overflow (infinite storage)
-                LOGGER.info("Item {} reached origin - storing in servo overflow", item.stack);
                 handleReturnedItem(item);
                 iterator.remove();
             }
@@ -663,31 +616,20 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         Direction servoSide = item.destinationSide;
         Level world = getLevel();
 
-        LOGGER.info("handleReturnedItem: Looking for servo at {} side {} (item origin={}, dest={})",
-            servoPos, servoSide, item.origin, item.destination);
-
         if (world != null && !world.isClientSide) {
             // Find the original servo that extracted this item
             ItemGridNode servoNode = getNodes().get(servoPos);
             if (servoNode != null && servoNode.getDuct() != null) {
-                LOGGER.info("  Found node at {}, checking attachment on side {}", servoPos, servoSide);
                 var attachment = servoNode.getDuct().getAttachment(servoSide);
-                LOGGER.info("  Attachment: {}", attachment != null ? attachment.getClass().getSimpleName() : "null");
 
                 if (attachment instanceof cofh.thermal.dynamics.common.attachment.ItemServoAttachment servo) {
                     // Store in original servo's overflow (infinite storage)
                     servo.storeOverflowItem(item.stack);
-                    LOGGER.info("SUCCESS: Stored overflow item {} in servo at {} direction {}",
-                        item.stack, servoPos, servoSide);
                     return;
                 }
-            } else {
-                LOGGER.info("  Node not found at {} or duct is null", servoPos);
             }
 
             // If original servo not found, drop item at calculated position
-            LOGGER.warn("Original servo not found for overflow item {} at {} direction {} - dropping as entity",
-                item.stack, servoPos, servoSide);
             dropItemAsEntity(item);
         }
     }
@@ -710,7 +652,7 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
     }
     
     private void addItemToTransitTracking(ItemInTransit item) {
-        itemsInTransitToDestination.computeIfAbsent(item.destination, k -> new ConcurrentHashMap<>())
+        itemsInTransitToDestination.computeIfAbsent(item.destination, k -> new HashMap<>())
             .merge(item.destinationSide, item.stack.getCount(), Integer::sum);
     }
     
@@ -804,7 +746,7 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         
         // Merge transit tracking
         for (Map.Entry<BlockPos, Map<Direction, Integer>> entry : from.itemsInTransitToDestination.entrySet()) {
-            Map<Direction, Integer> ourMap = itemsInTransitToDestination.computeIfAbsent(entry.getKey(), k -> new ConcurrentHashMap<>());
+            Map<Direction, Integer> ourMap = itemsInTransitToDestination.computeIfAbsent(entry.getKey(), k -> new HashMap<>());
             for (Map.Entry<Direction, Integer> dirEntry : entry.getValue().entrySet()) {
                 ourMap.merge(dirEntry.getKey(), dirEntry.getValue(), Integer::sum);
             }
@@ -813,12 +755,8 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
 
     @Override
     public void onSplit(List<ItemGrid> others) {
-        LOGGER.info("onSplit called with {} new grids, {} items in transit, {} returning items",
-            others.size(), itemsInTransit.size(), returningItems.size());
-
         // If no new grids (all ducts removed), drop all items
         if (others.isEmpty()) {
-            LOGGER.info("No new grids - dropping all items");
             for (ItemInTransit item : itemsInTransit) {
                 dropItemAsEntity(item);
             }
@@ -836,28 +774,20 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         Map<BlockPos, ItemGrid> nodeToGrid = new HashMap<>();
         for (ItemGrid newGrid : others) {
             Map<BlockPos, ItemGridNode> newGridNodes = newGrid.getNodes();
-            LOGGER.info("New grid has {} nodes: {}", newGridNodes.size(), newGridNodes.keySet());
             for (BlockPos pos : newGridNodes.keySet()) {
                 nodeToGrid.put(pos, newGrid);
             }
         }
 
-        LOGGER.info("Built nodeToGrid with {} entries: {}", nodeToGrid.size(), nodeToGrid.keySet());
-
         // Process items in transit - decide based on which endpoints are reachable
         for (ItemInTransit item : itemsInTransit) {
-            LOGGER.info("Processing forward item {} - origin={}, dest={}, path={}, distTraveled={}",
-                item.stack, item.origin, item.destination, item.path, item.distanceTraveled);
-
             // Find which grid(s) contain our endpoints
             ItemGrid originGrid = nodeToGrid.get(item.origin);
-            LOGGER.info("  originGrid = {}", originGrid != null ? "found" : "null");
 
             // Check if destination has an item handler (external block capability)
             BlockEntity destTile = world.getBlockEntity(item.destination);
             boolean destHasHandler = destTile != null &&
                 destTile.getCapability(ForgeCapabilities.ITEM_HANDLER, item.destinationSide).isPresent();
-            LOGGER.info("  destTile exists = {}, hasHandler = {}", destTile != null, destHasHandler);
 
             // Find which grid connects to the destination
             // We need to check if any grid has a path node that can reach the destination
@@ -869,7 +799,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
                     for (Direction dir : Direction.values()) {
                         if (nodePos.relative(dir).equals(item.destination)) {
                             destGrid = newGrid;
-                            LOGGER.info("  Found destGrid via adjacent node {} to dest {}", nodePos, item.destination);
                             break;
                         }
                     }
@@ -890,7 +819,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
                 // Calculate item's current position based on distance traveled
                 net.minecraft.world.phys.Vec3 currentPos = calculateItemWorldPosition(item);
                 BlockPos currentBlockPos = BlockPos.containing(currentPos);
-                LOGGER.info("  Item current position: {}", currentBlockPos);
 
                 // Find which grid the item's current position is in
                 // Check if current position is a node in any grid
@@ -902,7 +830,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
                         BlockPos adjacent = currentBlockPos.relative(dir);
                         itemCurrentGrid = nodeToGrid.get(adjacent);
                         if (itemCurrentGrid != null) {
-                            LOGGER.info("  Found item grid via adjacent node {}", adjacent);
                             break;
                         }
                     }
@@ -911,13 +838,7 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
                 // Fallback to origin grid if still not found
                 if (itemCurrentGrid == null) {
                     itemCurrentGrid = originGrid;
-                    LOGGER.info("  Fallback to origin grid for item position");
                 }
-
-                LOGGER.info("  itemCurrentGrid = {}, destGrid = {}, same = {}",
-                    itemCurrentGrid != null ? "found" : "null",
-                    destGrid != null ? "found" : "null",
-                    itemCurrentGrid == destGrid);
 
                 if (itemCurrentGrid == destGrid) {
                     // Item is in the grid that can reach destination - continue forward!
@@ -930,10 +851,7 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
                     }
                     item.path = validPath;
                     destGrid.itemsInTransit.add(item);
-                    LOGGER.info("Item {} continues forward to destination {} in destGrid", item.stack, item.destination);
                     continue;
-                } else {
-                    LOGGER.info("  Item is in different grid than destGrid - cannot continue forward");
                 }
             }
 
@@ -950,7 +868,6 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
                     }
                 }
                 item.path = validPath;
-                LOGGER.info("Filtered path to {} positions for returning item", validPath.size());
 
                 originGrid.returningItems.add(item);
 
@@ -961,13 +878,9 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
                         servo.notifyBackflow();
                     }
                 }
-
-                LOGGER.info("Item {} backflowing to origin {} in originGrid", item.stack, item.destination);
             } else {
                 // Neither destination nor origin reachable - drop as entity
                 dropItemAsEntity(item);
-                LOGGER.info("Item {} dropped - neither origin {} nor destination {} reachable",
-                    item.stack, item.origin, item.destination);
             }
         }
 
@@ -988,12 +901,9 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             if (destGrid != null && destGrid.getNodes().containsKey(item.destination)) {
                 // Transfer item to the grid containing its destination
                 destGrid.returningItems.add(item);
-                LOGGER.debug("Returning item {} transferred to destination grid during split", item.stack);
             } else {
                 // Destination is completely disconnected - drop as entity
                 dropItemAsEntity(item);
-                LOGGER.debug("Returning item {} dropped as entity during split - destination {} not reachable",
-                    item.stack, item.destination);
             }
         }
 
@@ -1027,13 +937,13 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         for (ItemInTransit item : itemsInTransit) {
             transitList.add(item.serializeNBT());
         }
-        tag.put("itemsInTransit", transitList);
-        
+        tag.put(TAG_ITEMS_IN_TRANSIT, transitList);
+
         ListTag returningList = new ListTag();
         for (ItemInTransit item : returningItems) {
             returningList.add(item.serializeNBT());
         }
-        tag.put("returningItems", returningList);
+        tag.put(TAG_RETURNING_ITEMS, returningList);
 
         return tag;
     }
@@ -1046,7 +956,7 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
         itemsInTransit.clear();
         itemsInTransitToDestination.clear();
         
-        ListTag transitList = nbt.getList("itemsInTransit", 10);
+        ListTag transitList = nbt.getList(TAG_ITEMS_IN_TRANSIT, 10);
         for (int i = 0; i < transitList.size(); i++) {
             ItemInTransit item = new ItemInTransit();
             item.deserializeNBT(transitList.getCompound(i));
@@ -1054,9 +964,9 @@ public class ItemGrid extends Grid<ItemGrid, ItemGridNode> {
             // Rebuild transit tracking
             addItemToTransitTracking(item);
         }
-        
+
         returningItems.clear();
-        ListTag returningList = nbt.getList("returningItems", 10);
+        ListTag returningList = nbt.getList(TAG_RETURNING_ITEMS, 10);
         for (int i = 0; i < returningList.size(); i++) {
             ItemInTransit item = new ItemInTransit();
             item.deserializeNBT(returningList.getCompound(i));

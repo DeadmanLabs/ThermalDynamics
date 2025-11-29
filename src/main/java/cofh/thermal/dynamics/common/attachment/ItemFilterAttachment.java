@@ -28,7 +28,7 @@ import java.util.function.Predicate;
 
 import static cofh.lib.util.constants.NBTTags.TAG_TYPE;
 import static cofh.thermal.core.ThermalCore.ITEMS;
-import static cofh.thermal.dynamics.client.TDynTextures.FILTER_ATTACHMENT_LOC;
+import static cofh.thermal.dynamics.client.TDynTextures.*;
 import static cofh.thermal.dynamics.init.registries.TDynIDs.FILTER;
 import static cofh.thermal.dynamics.init.registries.TDynIDs.ID_FILTER_ATTACHMENT;
 
@@ -96,7 +96,12 @@ public class ItemFilterAttachment implements IFilterableAttachment, IRedstoneCon
 
     @Override
     public ResourceLocation getTexture() {
-        return FILTER_ATTACHMENT_LOC;
+        boolean active = rsControl.getState();
+        // Show overflow/blocked texture when redstone has disabled the filter
+        if (!active) {
+            return FILTER_ATTACHMENT_OVERFLOW_LOC;
+        }
+        return FILTER_ATTACHMENT_ACTIVE_LOC;
     }
 
     @Override

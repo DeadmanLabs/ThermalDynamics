@@ -5,7 +5,7 @@ import cofh.core.client.gui.element.ElementButton;
 import cofh.core.client.gui.element.ElementTexture;
 import cofh.core.client.gui.element.SimpleTooltip;
 import cofh.core.client.gui.element.panel.RSControlPanel;
-import cofh.thermal.dynamics.common.attachment.ItemTurboServoAttachment;
+import cofh.thermal.dynamics.common.attachment.ItemServoAttachment;
 import cofh.thermal.dynamics.common.inventory.attachment.ItemTurboServoAttachmentMenu;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -35,13 +35,13 @@ public class ItemTurboServoAttachmentScreen extends ContainerScreenCoFH<ItemTurb
     public static final String TEX_IGNORE_NBT = PATH_GUI + "filters/filter_ignore_nbt.png";
     public static final String TEX_USE_NBT = PATH_GUI + "filters/filter_use_nbt.png";
 
-    protected final ItemTurboServoAttachment attachment;
+    protected final ItemServoAttachment attachment;
 
     public ItemTurboServoAttachmentScreen(ItemTurboServoAttachmentMenu container, Inventory inv, Component titleIn) {
         super(container, inv, titleIn);
 
         texture = TEXTURE;
-        attachment = container.turboAttachment;
+        attachment = container.attachment;
         info = generatePanelInfo("info.thermal.item_turbo_servo_attachment");
     }
 
@@ -71,8 +71,8 @@ public class ItemTurboServoAttachmentScreen extends ContainerScreenCoFH<ItemTurb
 
     // region ELEMENTS
     protected void addButtons() {
-        // Increment transfer amount button
-        addElement(new ElementButton(this, 130, 46) {
+        // Increment transfer amount button (below the count display, left)
+        addElement(new ElementButton(this, 137, 60) {
             @Override
             public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
                 menu.incrementTransferAmount();
@@ -81,12 +81,12 @@ public class ItemTurboServoAttachmentScreen extends ContainerScreenCoFH<ItemTurb
             }
         }
                 .setSize(12, 12)
-                .setTexture(TEX_INCREMENT, 24, 12)
+                .setTexture(TEX_INCREMENT, 36, 12)
                 .setTooltipFactory(new SimpleTooltip(Component.translatable("info.thermal.increment_transfer")))
                 .setVisible(() -> menu.getTransferAmount() < menu.getMaxTransferAmount()));
 
-        // Decrement transfer amount button
-        addElement(new ElementButton(this, 130, 58) {
+        // Decrement transfer amount button (below the count display, right)
+        addElement(new ElementButton(this, 151, 60) {
             @Override
             public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
                 menu.decrementTransferAmount();
@@ -95,7 +95,7 @@ public class ItemTurboServoAttachmentScreen extends ContainerScreenCoFH<ItemTurb
             }
         }
                 .setSize(12, 12)
-                .setTexture(TEX_DECREMENT, 24, 12)
+                .setTexture(TEX_DECREMENT, 36, 12)
                 .setTooltipFactory(new SimpleTooltip(Component.translatable("info.thermal.decrement_transfer")))
                 .setVisible(() -> menu.getTransferAmount() > menu.getMinTransferAmount()));
 

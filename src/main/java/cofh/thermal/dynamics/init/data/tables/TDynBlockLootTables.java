@@ -25,24 +25,6 @@ public class TDynBlockLootTables extends BlockLootSubProviderCoFH {
         createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_DENSE_OPAQUE));
         createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_VACUUM));
         createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_VACUUM_OPAQUE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_IMPULSE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_IMPULSE_OPAQUE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_IMPULSE_DENSE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_IMPULSE_DENSE_OPAQUE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_IMPULSE_VACUUM));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_IMPULSE_VACUUM_OPAQUE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_SIGNALUM));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_SIGNALUM_OPAQUE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_SIGNALUM_DENSE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_SIGNALUM_DENSE_OPAQUE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_SIGNALUM_VACUUM));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_SIGNALUM_VACUUM_OPAQUE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_OPAQUE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_DENSE_OPAQUE));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM));
-        createSimpleDropTable(regBlocks.get(ID_ITEM_DUCT_SIGNALUM_IMPULSE_VACUUM_OPAQUE));
 
         // createSyncDropTable(regBlocks.get(ID_ENERGY_DISTRIBUTOR));
 

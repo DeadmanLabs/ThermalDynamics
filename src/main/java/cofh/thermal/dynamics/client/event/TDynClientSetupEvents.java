@@ -22,11 +22,7 @@ public class TDynClientSetupEvents {
 
     @SubscribeEvent
     public static void clientSetup(final FMLClientSetupEvent event) {
-        event.enqueueWork(() -> {
-            System.out.println("TDynClientSetup: Registering ItemTransportRenderer");
-            ItemTransportRenderer.register();
-            System.out.println("TDynClientSetup: ItemTransportRenderer registered");
-        });
+        event.enqueueWork(ItemTransportRenderer::register);
     }
 
     @SubscribeEvent

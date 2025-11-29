@@ -19,6 +19,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.items.SlotItemHandler;
 
+import net.minecraft.world.inventory.MenuType;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,7 +34,11 @@ public class ItemServoAttachmentMenu extends AttachmentMenu implements IFilterOp
     protected InvWrapperGeneric filterInventory;
 
     public ItemServoAttachmentMenu(int id, Level world, BlockPos pos, Direction side, Inventory inventory, Player player) {
-        super(ITEM_SERVO_ATTACHMENT_CONTAINER.get(), id, world, pos, side, inventory, player);
+        this(ITEM_SERVO_ATTACHMENT_CONTAINER.get(), id, world, pos, side, inventory, player);
+    }
+
+    protected ItemServoAttachmentMenu(MenuType<?> type, int id, Level world, BlockPos pos, Direction side, Inventory inventory, Player player) {
+        super(type, id, world, pos, side, inventory, player);
 
         if (hostTile instanceof IDuct<?, ?> duct && duct.getAttachment(side) instanceof ItemServoAttachment expectedAttachment) {
             this.attachment = expectedAttachment;
@@ -41,7 +47,7 @@ public class ItemServoAttachmentMenu extends AttachmentMenu implements IFilterOp
             this.attachment = null;
         }
         allowSwap = false;
-        
+
         if (filter != null) {
             int slots = filter.size();
             filterInventory = new InvWrapperGeneric(this, filter.getItems(), slots) {
